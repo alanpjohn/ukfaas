@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2022, Unikraft GmbH and The KraftKit Authors.
+// Licensed under the BSD-3-Clause License (the "License").
+// You may not use this file except in compliance with the License.
+syntax = "proto3";
+
+package qmp.v1alpha;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/descriptor.proto";
+
+option go_package = "kraftkit.sh/machine/qemu/qmp/v1alpha;qmpv1alpha";
+
+extend google.protobuf.MessageOptions {
+	string execute = 51000;
+}
+
+extend google.protobuf.EnumValueOptions {
+	string json_name   = 51001;
+	string map_message = 51002;
+}

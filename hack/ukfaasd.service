@@ -1,0 +1,13 @@
+[Unit]
+Description=ukfaasd
+After=ukfaasd-provider.service
+
+[Service]
+MemoryLimit=500M
+ExecStart=/usr/local/bin/ukfaasd up
+Restart=on-failure
+RestartSec=10s
+WorkingDirectory={{.Cwd}}
+
+[Install]
+WantedBy=multi-user.target

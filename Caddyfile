@@ -1,0 +1,19 @@
+ukfaas.dev {
+	reverse_proxy 127.0.0.1:8080
+}
+
+localhost {
+	reverse_proxy * {
+		to 127.0.0.1/*
+		lb_policy least_conn
+
+		# Set the duration for health check
+		lb_try_duration 1s
+
+		# Configure health checks
+		health_uri /
+		health_status 200
+		health_interval 10s
+		health_timeout 3s
+	}
+}
