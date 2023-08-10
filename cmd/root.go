@@ -66,7 +66,7 @@ func printVersion() {
 	fmt.Printf("uk-faas version: %s\tcommit: %s\n", GetVersion(), GetGitCommit())
 }
 
-func GetGitCommit() string {
+func GetVersion() string {
 	if len(Version) == 0 {
 		return "dirty"
 	}
@@ -74,9 +74,9 @@ func GetGitCommit() string {
 }
 
 // GetVersion get latest version
-func GetVersion() string {
-	if len(Version) == 0 {
+func GetGitCommit() string {
+	if len(GitCommit) == 0 {
 		return "dev"
 	}
-	return Version
+	return GitCommit
 }
