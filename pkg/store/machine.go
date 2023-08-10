@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sync"
+	"time"
 
 	zip "api.zip"
 	"github.com/alanpjohn/uk-faas/pkg"
@@ -95,6 +97,11 @@ func (m *MachineStore) GetReplicas(service string) uint64 {
 		}
 	}
 	return uint64(count)
+}
+
+func (m *MachineStore) GetAvailableReplicas(service string) uint64 {
+	count, _ := m.caddy.HealthyInstances(service)
+	return count
 }
 
 func (m *MachineStore) ScaleMachinesTo(ctx context.Context, service string, replicas uint64) error {
@@ -419,10 +426,29 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 
 	for _, network := range machine.Spec.Networks {
 		for _, iface := range network.Interfaces {
-			err = m.caddy.AddFunctionInstance(mreq.Service, iface.Spec.IP)
-			if err != nil {
-				return err
-			}
+			go func(ip string) {
+				url := fmt.Sprintf("%s:%d", ip, pkg.WatchdogPort)
+				client := &http.Client{}
+				status := 0
+
+				for status != http.StatusOK {
+					req, err := http.NewRequest("GET", fmt.Sprintf("http://%s", url), nil)
+					if err != nil {
+						time.Sleep(2 * time.Second)
+						continue
+					}
+
+					resp, err := client.Do(req)
+					if err != nil {
+						time.Sleep(2 * time.Second)
+						continue
+					}
+					status = resp.StatusCode
+					resp.Body.Close()
+				}
+
+				m.caddy.AddFunctionInstance(mreq.Service, ip)
+			}(iface.Spec.IP)
 		}
 	}
 

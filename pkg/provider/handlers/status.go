@@ -29,7 +29,7 @@ func MakeFunctionStatusHandler(fStore *store.FunctionStore, mStore *store.Machin
 
 		if found, err := fStore.GetFunctionStatus(service); err == nil {
 			found.Replicas = mStore.GetReplicas(found.Name)
-			found.AvailableReplicas = mStore.GetReplicas(found.Name)
+			found.AvailableReplicas = mStore.GetAvailableReplicas(found.Name)
 			functionBytes, _ := json.Marshal(found)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)

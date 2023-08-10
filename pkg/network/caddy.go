@@ -37,20 +37,20 @@ func NewCaddyController() (*CaddyController, error) {
 }
 
 func (c *CaddyController) AddFunctionInstance(service string, ipaddr string) error {
+	url := fmt.Sprintf("%s:%d", ipaddr, pkg.WatchdogPort)
+
 	c.Lock()
 	defer c.Unlock()
 
-	uri := fmt.Sprintf("%s:%d", ipaddr, pkg.WatchdogPort)
 	if _, exists := c.serviceIPCache[service]; !exists {
-		log.Printf("[CaddyController] adding IP %s to existing service %s\n", uri, service)
-		c.serviceIPCache[service] = []string{uri}
-		return c.reloadConfig()
+		log.Printf("[CaddyController] adding IP %s to existing service %s\n", url, service)
+		c.serviceIPCache[service] = []string{url}
+	} else {
+		log.Printf("[CaddyController] adding IP %s to new service %s\n", url, service)
+		ips := c.serviceIPCache[service]
+		ips = append(ips, url)
+		c.serviceIPCache[service] = ips
 	}
-
-	log.Printf("[CaddyController] adding IP %s to new service %s\n", uri, service)
-	ips := c.serviceIPCache[service]
-	ips = append(ips, uri)
-	c.serviceIPCache[service] = ips
 
 	return c.reloadConfig()
 }
@@ -133,7 +133,6 @@ func (c *CaddyController) reloadConfig() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("[CaddyController] - Debug New Config: %s\n", rawBody)
 
 	req, err := http.NewRequest(http.MethodPatch, caddyRoutesURL, bytes.NewReader(rawBody))
 	if err != nil {
@@ -145,7 +144,7 @@ func (c *CaddyController) reloadConfig() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("[CaddyController] Reload Caddy: %s\n", resp.Body)
+	log.Printf("[CaddyController] Reload Caddy: %s\n", resp.Status)
 	defer resp.Body.Close()
 	return nil
 }
@@ -159,4 +158,15 @@ func (c *CaddyController) GetServiceURl(service string) (*url.URL, error) {
 	}
 
 	return &url.URL{}, fmt.Errorf("service not found : %s", service)
+}
+
+func (c *CaddyController) HealthyInstances(serviceName string) (uint64, error) {
+	c.RLock()
+	defer c.RUnlock()
+
+	if ips, exists := c.serviceIPCache[serviceName]; exists {
+		return uint64(len(ips)), nil
+	}
+
+	return 0, fmt.Errorf("service not found : %s", serviceName)
 }

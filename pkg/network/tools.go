@@ -8,7 +8,7 @@ import (
 
 func getServiceName(s string) (string, error) {
 	// Define the regular expression pattern to match "/api/" followed by the service name
-	re := regexp.MustCompile(`/api/(\w+)`)
+	re := regexp.MustCompile(`/function/(\w+)`)
 
 	// Find the first match in the input string
 	matches := re.FindStringSubmatch(s)
@@ -33,5 +33,5 @@ func ServiceToURL(service string) string {
 	if strings.Contains(service, "/") {
 		return service
 	}
-	return fmt.Sprintf("/api/%s", service)
+	return fmt.Sprintf("/function/%s", service)
 }

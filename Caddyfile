@@ -3,8 +3,8 @@ ukfaas.dev {
 }
 
 localhost {
-	reverse_proxy * {
-		to 127.0.0.1/*
+	reverse_proxy /gateway {
+		to 127.0.0.1:8080
 		lb_policy least_conn
 
 		# Set the duration for health check

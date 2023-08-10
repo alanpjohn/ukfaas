@@ -7,4 +7,5 @@ type NetworkController interface {
 	DeleteFunction(string) error
 	DeleteFunctionInstance(string, string) error
 	GetServiceURl(string) (*url.URL, error)
+	HealthyInstances(string) (uint64, error)
 }
