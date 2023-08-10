@@ -32,13 +32,17 @@ archives:
     # use zip for windows archives
 checksum:
   name_template: 'checksums.txt'
+signs:
+ - artifacts: checksum
+   args: ["--batch", "-u", "{{ .Env.GPG_FINGERPRINT }}", "--output", "${signature}", "--detach-sign", "${artifact}"]
 changelog:
   sort: asc
   filters:
     exclude:
       - '^docs:'
       - '^test:'
-
+snapshot:
+  name_template: '{{ .Version }}-{{ .ShortCommit }}'
 # The lines beneath this are called `modelines`. See `:help modeline`
 # Feel free to remove those if you don't want/use them.
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
