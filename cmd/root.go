@@ -63,7 +63,14 @@ func parseBaseCommand(_ *cobra.Command, _ []string) {
 }
 
 func printVersion() {
-	fmt.Printf("uk-faas version: %s\tcommit: %s\n", GetVersion(), GitCommit)
+	fmt.Printf("uk-faas version: %s\tcommit: %s\n", GetVersion(), GetGitCommit())
+}
+
+func GetGitCommit() string {
+	if len(Version) == 0 {
+		return "dirty"
+	}
+	return Version
 }
 
 // GetVersion get latest version
