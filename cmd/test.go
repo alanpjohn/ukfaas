@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/alanpjohn/uk-faas/pkg/network"
+	network "github.com/alanpjohn/uk-faas/pkg/network"
 	"github.com/alanpjohn/uk-faas/pkg/store"
 	"github.com/openfaas/faas-provider/types"
 	"github.com/spf13/cobra"
@@ -33,10 +33,12 @@ func runTest(_ *cobra.Command, _ []string) error {
 
 	defer fStore.Close()
 
-	caddyController, err := network.NewCaddyController()
+	caddyController, err := network.GetNetworkController("caddy")
 	if err != nil {
 		return err
 	}
+
+	go caddyController.RunHealthChecks(ctx)
 
 	mStore, err := store.NewMachineStore(caddyController)
 	if err != nil {
@@ -68,7 +70,7 @@ func runTest(_ *cobra.Command, _ []string) error {
 	reader := bufio.NewReader(os.Stdin)
 	_, _ = reader.ReadString('\n')
 
-	err = mStore.ScaleMachinesTo(ctx, req.Service, 8)
+	err = mStore.ScaleMachinesTo(ctx, req.Service, 2)
 	if err != nil {
 		return err
 	}

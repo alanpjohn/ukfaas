@@ -1,7 +1,8 @@
-package network
+package caddy
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"encoding/json"
 
 	"github.com/alanpjohn/uk-faas/pkg"
+	networkapi "github.com/alanpjohn/uk-faas/pkg/api/network"
 )
 
 type CaddyController struct {
@@ -20,7 +22,7 @@ type CaddyController struct {
 	permanentRoutes []routeConfig
 }
 
-func NewCaddyController() (*CaddyController, error) {
+func NewCaddyController(_ ...any) (networkapi.NetworkController, error) {
 	routes, err := GetUKFaaSRoutes()
 	if err != nil {
 		return nil, err
@@ -36,7 +38,7 @@ func NewCaddyController() (*CaddyController, error) {
 	}, nil
 }
 
-func (c *CaddyController) AddFunctionInstance(service string, ipaddr string) error {
+func (c *CaddyController) AddServiceIP(service string, ipaddr networkapi.IP) error {
 	url := fmt.Sprintf("%s:%d", ipaddr, pkg.WatchdogPort)
 
 	c.Lock()
@@ -55,7 +57,7 @@ func (c *CaddyController) AddFunctionInstance(service string, ipaddr string) err
 	return c.reloadConfig()
 }
 
-func (c *CaddyController) DeleteFunction(service string) error {
+func (c *CaddyController) DeleteService(service string) error {
 	c.Lock()
 	defer c.Unlock()
 
@@ -69,7 +71,7 @@ func (c *CaddyController) DeleteFunction(service string) error {
 	return c.reloadConfig()
 }
 
-func (c *CaddyController) DeleteFunctionInstance(service string, ipaddr string) error {
+func (c *CaddyController) DeleteServiceIP(service string, ipaddr networkapi.IP) error {
 	c.Lock()
 	defer c.Unlock()
 
@@ -80,7 +82,7 @@ func (c *CaddyController) DeleteFunctionInstance(service string, ipaddr string) 
 	log.Printf("[CaddyController] deleting IP %s from existing service %s\n", ipaddr, service)
 	var ips []string
 	for _, ip := range c.serviceIPCache[service] {
-		if strings.Split(ip, ":")[0] != ipaddr {
+		if strings.Split(ip, ":")[0] != string(ipaddr) {
 			ips = append(ips, ip)
 		}
 	}
@@ -149,7 +151,7 @@ func (c *CaddyController) reloadConfig() error {
 	return nil
 }
 
-func (c *CaddyController) GetServiceURl(service string) (*url.URL, error) {
+func (c *CaddyController) ResolveServiceEndpoint(service string) (*url.URL, error) {
 	c.RLock()
 	defer c.RUnlock()
 
@@ -160,7 +162,7 @@ func (c *CaddyController) GetServiceURl(service string) (*url.URL, error) {
 	return &url.URL{}, fmt.Errorf("service not found : %s", service)
 }
 
-func (c *CaddyController) HealthyInstances(serviceName string) (uint64, error) {
+func (c *CaddyController) AvailableIPs(serviceName string) (uint64, error) {
 	c.RLock()
 	defer c.RUnlock()
 
@@ -169,4 +171,8 @@ func (c *CaddyController) HealthyInstances(serviceName string) (uint64, error) {
 	}
 
 	return 0, fmt.Errorf("service not found : %s", serviceName)
+}
+
+func (c *CaddyController) RunHealthChecks(_ context.Context) {
+	log.Printf("[CaddyController] - Health checks will be done by Caddy")
 }

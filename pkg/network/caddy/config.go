@@ -1,4 +1,4 @@
-package network
+package caddy
 
 import (
 	"encoding/json"

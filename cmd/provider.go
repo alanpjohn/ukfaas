@@ -9,7 +9,7 @@ import (
 	"path"
 
 	faasdlogs "github.com/alanpjohn/uk-faas/pkg/logs"
-	"github.com/alanpjohn/uk-faas/pkg/network"
+	network "github.com/alanpjohn/uk-faas/pkg/network"
 	"github.com/alanpjohn/uk-faas/pkg/provider/handlers"
 	"github.com/alanpjohn/uk-faas/pkg/store"
 	bootstrap "github.com/openfaas/faas-provider"
@@ -74,10 +74,12 @@ func makeProviderCmd() *cobra.Command {
 
 		defer fStore.Close()
 
-		caddyController, err := network.NewCaddyController()
+		caddyController, err := network.GetNetworkController("caddy")
 		if err != nil {
 			return err
 		}
+
+		go caddyController.RunHealthChecks(ctx)
 
 		mStore, err := store.NewMachineStore(caddyController)
 		if err != nil {

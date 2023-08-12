@@ -8,17 +8,17 @@ import (
 	"strings"
 
 	"github.com/alanpjohn/uk-faas/pkg"
-	"github.com/alanpjohn/uk-faas/pkg/network"
+	networkapi "github.com/alanpjohn/uk-faas/pkg/api/network"
 	"github.com/alanpjohn/uk-faas/pkg/store"
 )
 
 type InvokeResolver struct {
 	fStore       *store.FunctionStore
 	mStore       *store.MachineStore
-	networkStore network.NetworkController
+	networkStore networkapi.NetworkController
 }
 
-func NewInvokeResolver(f *store.FunctionStore, m *store.MachineStore, n network.NetworkController) *InvokeResolver {
+func NewInvokeResolver(f *store.FunctionStore, m *store.MachineStore, n networkapi.NetworkController) *InvokeResolver {
 	return &InvokeResolver{
 		fStore:       f,
 		mStore:       m,
@@ -42,7 +42,7 @@ func (i *InvokeResolver) Resolve(functionName string) (url.URL, error) {
 			}
 		}
 
-		urlRes, err := i.networkStore.GetServiceURl(actualFunctionName)
+		urlRes, err := i.networkStore.ResolveServiceEndpoint(actualFunctionName)
 		if err != nil {
 			log.Printf("[Resolve] - Error %v\n", err)
 			return url.URL{}, err
