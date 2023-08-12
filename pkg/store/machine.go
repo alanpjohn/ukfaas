@@ -37,7 +37,7 @@ type MachineStore struct {
 	// Stores machineConfiguration by machineID
 	machineInstanceMap map[MachineID]*kraftMachine.Machine
 	machineNetworkMap  map[MachineID]kraftNet.NetworkInterfaceTemplateSpec
-	caddy              networkapi.NetworkController
+	networkController  networkapi.NetworkController
 }
 
 type MachineRequest struct {
@@ -57,7 +57,7 @@ func NewMachineStore(caddy networkapi.NetworkController) (*MachineStore, error) 
 
 	return &MachineStore{
 		// functionMachineMap: make(map[string][]MachineID),
-		caddy:              caddy,
+		networkController:  caddy,
 		machineInstanceMap: make(map[MachineID]*zip.Object[kraftMachine.MachineSpec, kraftMachine.MachineStatus]),
 		machineNetworkMap:  make(map[MachineID]kraftNet.NetworkInterfaceTemplateSpec),
 		// volumeController:   volumeService,
@@ -100,7 +100,7 @@ func (m *MachineStore) GetReplicas(service string) uint64 {
 }
 
 func (m *MachineStore) GetAvailableReplicas(service string) uint64 {
-	count, _ := m.caddy.AvailableIPs(service)
+	count, _ := m.networkController.AvailableIPs(service)
 	return count
 }
 
@@ -185,7 +185,7 @@ func (m *MachineStore) destroyMachine(ctx context.Context, service string) error
 	// 	}
 	// }
 
-	err = m.caddy.DeleteServiceIP(service, networkapi.IP(iface.Spec.IP))
+	err = m.networkController.DeleteServiceIP(service, networkapi.IP(iface.Spec.IP))
 	if err != nil {
 		return err
 	}
@@ -447,7 +447,7 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 					resp.Body.Close()
 				}
 
-				m.caddy.AddServiceIP(mreq.Service, networkapi.IP(ip))
+				m.networkController.AddServiceIP(mreq.Service, networkapi.IP(ip))
 			}(iface.Spec.IP)
 		}
 	}

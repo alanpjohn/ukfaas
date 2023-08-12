@@ -5,13 +5,13 @@ import (
 
 	networkapi "github.com/alanpjohn/uk-faas/pkg/api/network"
 	"github.com/alanpjohn/uk-faas/pkg/network/caddy"
-	// "github.com/alanpjohn/uk-faas/pkg/network/internal"
+	"github.com/alanpjohn/uk-faas/pkg/network/internal"
 )
 
 func init() {
 	networkControllers = map[NetworkControllerType]NetworkControllerConstructor{
-		// "internal": internal.NewInternalNetworkContoller,
-		"caddy": caddy.NewCaddyController,
+		"internal": internal.NewInternalNetworkContoller,
+		"caddy":    caddy.NewCaddyController,
 	}
 }
 

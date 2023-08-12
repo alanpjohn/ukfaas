@@ -74,19 +74,19 @@ func makeProviderCmd() *cobra.Command {
 
 		defer fStore.Close()
 
-		caddyController, err := network.GetNetworkController("caddy")
+		networkController, err := network.GetNetworkController("internal")
 		if err != nil {
 			return err
 		}
 
-		go caddyController.RunHealthChecks(ctx)
+		go networkController.RunHealthChecks(ctx)
 
-		mStore, err := store.NewMachineStore(caddyController)
+		mStore, err := store.NewMachineStore(networkController)
 		if err != nil {
 			return err
 		}
 
-		invokeResolver := handlers.NewInvokeResolver(fStore, mStore, caddyController)
+		invokeResolver := handlers.NewInvokeResolver(fStore, mStore, networkController)
 
 		baseUserSecretsPath := path.Join(wd, "secrets")
 
