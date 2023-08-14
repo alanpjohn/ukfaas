@@ -112,7 +112,6 @@ func (n *InternalNetworkContoller) DeleteService(service string) error {
 }
 
 func (n *InternalNetworkContoller) ResolveServiceEndpoint(service string) (*url.URL, error) {
-	log.Printf("[InternalNetworkController.ResolveServiceEndpoint] - Called Resolver for %s", service)
 	val, exists := n.instancesMap.Load(service)
 	if !exists {
 		return nil, fmt.Errorf("service not found: %s", service)
@@ -121,7 +120,6 @@ func (n *InternalNetworkContoller) ResolveServiceEndpoint(service string) (*url.
 	if !ok {
 		return nil, fmt.Errorf("invalid load balancer")
 	}
-	log.Printf("[InternalNetworkController.ResolveServiceEndpoint] - Found LoadBalancer for %s\n", service)
 	var maxLen uint64 = lb.Size()
 	var tries uint64
 	for tries = 0; tries < maxLen || tries < 5; tries++ {
@@ -129,11 +127,8 @@ func (n *InternalNetworkContoller) ResolveServiceEndpoint(service string) (*url.
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("[InternalNetworkController.ResolveServiceEndpoint] - Checking IP %s\n", ip)
 		if val, exists := n.healthCheckTable.Load(ip); exists {
-			log.Printf("[InternalNetworkController.ResolveServiceEndpoint] - Health of IP %s is %v\n", ip, val)
 			if isHealthy, ok := val.(bool); ok && isHealthy {
-				log.Printf("[InternalNetworkController.ResolveServiceEndpoint] - Resolving Service %s to IP %s\n", service, ip)
 				return url.Parse(fmt.Sprintf("http://%s:%d", ip, pkg.WatchdogPort))
 			}
 		}

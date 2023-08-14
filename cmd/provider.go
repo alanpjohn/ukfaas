@@ -94,7 +94,7 @@ func makeProviderCmd() *cobra.Command {
 			FunctionProxy:  proxy.NewHandlerFunc(*config, invokeResolver),
 			DeleteFunction: handlers.MakeDeleteHandler(fStore, mStore),
 			DeployFunction: handlers.MakeDeployHandler(fStore, mStore, baseUserSecretsPath, alwaysPull),
-			FunctionLister: handlers.MakeReadHandler(fStore),
+			FunctionLister: handlers.MakeReadHandler(fStore, mStore),
 			FunctionStatus: handlers.MakeFunctionStatusHandler(fStore, mStore),
 			ScaleFunction:  handlers.MakeReplicaUpdateHandler(fStore, mStore),
 			UpdateFunction: handlers.MakeUpdateHandler(fStore, mStore),

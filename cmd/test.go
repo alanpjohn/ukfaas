@@ -33,21 +33,21 @@ func runTest(_ *cobra.Command, _ []string) error {
 
 	defer fStore.Close()
 
-	caddyController, err := network.GetNetworkController("caddy")
+	networkController, err := network.GetNetworkController("internal")
 	if err != nil {
 		return err
 	}
 
-	go caddyController.RunHealthChecks(ctx)
+	go networkController.RunHealthChecks(ctx)
 
-	mStore, err := store.NewMachineStore(caddyController)
+	mStore, err := store.NewMachineStore(networkController)
 	if err != nil {
 		return err
 	}
 
 	req := types.FunctionDeployment{
-		Image:       "unikraft.org/uk-py-faas:latest",
-		Service:     "hello-world",
+		Image:       "unikraft.org/uk-dynamic-html:latest",
+		Service:     "dynamic-html",
 		EnvVars:     map[string]string{},
 		Secrets:     []string{},
 		Labels:      &map[string]string{},

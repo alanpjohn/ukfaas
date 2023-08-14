@@ -31,7 +31,6 @@ func (i *InvokeResolver) Resolve(functionName string) (url.URL, error) {
 	if strings.Contains(functionName, ".") {
 		actualFunctionName = strings.TrimSuffix(functionName, "."+pkg.DefaultFunctionNamespace)
 	}
-	log.Printf("[InvokeResolver.Resolve] - Resolving for %s", actualFunctionName)
 	if function, err := i.fStore.GetFunction(actualFunctionName); err == nil {
 		if i.mStore.GetReplicas(actualFunctionName) == 0 {
 			log.Printf("[InvokeResolver.Resolve] - Scaling instances to 1 for %s", actualFunctionName)
@@ -42,13 +41,12 @@ func (i *InvokeResolver) Resolve(functionName string) (url.URL, error) {
 				return url.URL{}, scaleErr
 			}
 		}
-		log.Printf("[InvokeResolver.Resolve] - Calling NetworkController")
 		urlRes, err := i.networkStore.ResolveServiceEndpoint(actualFunctionName)
 		if err != nil {
 			log.Printf("[Resolve] - Error %v\n", err)
 			return url.URL{}, err
 		}
-		log.Printf("[InvokeResolver.Resolve] - Resolved url to %v\n", urlRes)
+		log.Printf("[InvokeResolver.Resolve] - Resolved %s to %v\n", actualFunctionName, urlRes)
 		// log.Printf("[Resolve] : Resolved %s to %s\n", functionName, urlRes)
 		return *urlRes, nil
 	} else {

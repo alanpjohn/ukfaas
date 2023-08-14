@@ -1,6 +1,6 @@
 Version := $(shell git describe --tags --dirty)
 GitCommit := $(shell git rev-parse HEAD)
-LDFLAGS := "-s -w -X main.Version=$(Version) -X main.GitCommit=$(GitCommit)"
+LDFLAGS := "-X main.Version=$(Version) -X main.GitCommit=$(GitCommit)"
 
 export GO111MODULE=on
 
@@ -12,11 +12,11 @@ publish: build hashgen
 
 .PHONY: build
 build:
-	CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags $(LDFLAGS) -o dist/faasd
+	CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags $(LDFLAGS) -o dist/ukfaasd ./cmd
 
 .PHONY: hashgen
 hashgen:
-	for f in dist/faasd*; do shasum -a 256 $$f > $$f.sha256; done
+	for f in dist/ukfaasd*; do shasum -a 256 $$f > $$f.sha256; done
 
 verify-compose:
 	@echo Verifying docker-compose.yaml images in remote registries && \

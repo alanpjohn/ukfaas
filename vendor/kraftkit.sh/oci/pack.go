@@ -242,9 +242,9 @@ func NewPackageFromTarget(ctx context.Context, targ target.Target, opts ...packm
 func NewPackageFromOCIManifestSpec(ctx context.Context, handle handler.Handler, ref string, manifest ocispec.Manifest) (pack.Package, error) {
 	// Check if the OCI image has a known annotation which identifies if a
 	// unikernel is contained within
-	if _, ok := manifest.Annotations[AnnotationKernelVersion]; !ok {
-		return nil, fmt.Errorf("OCI image does not contain a Unikraft unikernel")
-	}
+	// if _, ok := manifest.Annotations[AnnotationKernelVersion]; !ok {
+	// 	return nil, fmt.Errorf("OCI image does not contain a Unikraft unikernel")
+	// }
 
 	var err error
 
