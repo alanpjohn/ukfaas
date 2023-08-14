@@ -9,7 +9,7 @@ import (
 	"path"
 
 	faasdlogs "github.com/alanpjohn/uk-faas/pkg/logs"
-	"github.com/alanpjohn/uk-faas/pkg/network"
+	network "github.com/alanpjohn/uk-faas/pkg/network"
 	"github.com/alanpjohn/uk-faas/pkg/provider/handlers"
 	"github.com/alanpjohn/uk-faas/pkg/store"
 	bootstrap "github.com/openfaas/faas-provider"
@@ -74,17 +74,19 @@ func makeProviderCmd() *cobra.Command {
 
 		defer fStore.Close()
 
-		caddyController, err := network.NewCaddyController()
+		networkController, err := network.GetNetworkController("internal")
 		if err != nil {
 			return err
 		}
 
-		mStore, err := store.NewMachineStore(caddyController)
+		go networkController.RunHealthChecks(ctx)
+
+		mStore, err := store.NewMachineStore(networkController)
 		if err != nil {
 			return err
 		}
 
-		invokeResolver := handlers.NewInvokeResolver(fStore, mStore, caddyController)
+		invokeResolver := handlers.NewInvokeResolver(fStore, mStore, networkController)
 
 		baseUserSecretsPath := path.Join(wd, "secrets")
 
@@ -92,7 +94,7 @@ func makeProviderCmd() *cobra.Command {
 			FunctionProxy:  proxy.NewHandlerFunc(*config, invokeResolver),
 			DeleteFunction: handlers.MakeDeleteHandler(fStore, mStore),
 			DeployFunction: handlers.MakeDeployHandler(fStore, mStore, baseUserSecretsPath, alwaysPull),
-			FunctionLister: handlers.MakeReadHandler(fStore),
+			FunctionLister: handlers.MakeReadHandler(fStore, mStore),
 			FunctionStatus: handlers.MakeFunctionStatusHandler(fStore, mStore),
 			ScaleFunction:  handlers.MakeReplicaUpdateHandler(fStore, mStore),
 			UpdateFunction: handlers.MakeUpdateHandler(fStore, mStore),

@@ -54,7 +54,10 @@ func MakeReplicaUpdateHandler(fStore *store.FunctionStore, mStore *store.Machine
 
 		ctx := context.Background()
 		name := req.ServiceName
-		if exists := fStore.FunctionExists(name); exists {
+		if function, err := fStore.GetFunction(name); err == nil {
+			if mStore.GetReplicas(name) == 0 {
+				mStore.NewMachine(ctx, function)
+			}
 			err := mStore.ScaleMachinesTo(ctx, name, req.Replicas)
 			if err != nil {
 				msg := fmt.Sprintf("Function %s not scaled: %v", name, err)
@@ -62,7 +65,7 @@ func MakeReplicaUpdateHandler(fStore *store.FunctionStore, mStore *store.Machine
 				http.Error(w, msg, http.StatusInternalServerError)
 			}
 		} else {
-			msg := fmt.Sprintf("service %s not found", name)
+			msg := fmt.Sprintf("service %s not found : %v", name, err)
 			log.Printf("[Scale] %s\n", msg)
 			http.Error(w, msg, http.StatusNotFound)
 		}

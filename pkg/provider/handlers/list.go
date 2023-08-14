@@ -8,7 +8,7 @@ import (
 	"github.com/alanpjohn/uk-faas/pkg/store"
 )
 
-func MakeReadHandler(fStore *store.FunctionStore) func(w http.ResponseWriter, r *http.Request) {
+func MakeReadHandler(fStore *store.FunctionStore, mStore *store.MachineStore) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -29,6 +29,11 @@ func MakeReadHandler(fStore *store.FunctionStore) func(w http.ResponseWriter, r 
 
 		// fns, err := ListFunctions(client, lookupNamespace)
 		res, err := fStore.ListFunctions()
+		for _, function := range res {
+			function.Replicas = mStore.GetReplicas(function.Name)
+			function.AvailableReplicas = mStore.GetAvailableReplicas(function.Name)
+		}
+
 		if err != nil {
 			log.Printf("[List] error listing functions. Error: %s\n", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)

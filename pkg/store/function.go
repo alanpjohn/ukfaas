@@ -120,6 +120,8 @@ func (f *FunctionStore) AddFunction(ctx context.Context, req types.FunctionDeplo
 			)
 			if err == nil {
 				break
+			} else {
+				log.Printf("[FunctionStore.Addfunction] - ERROR : %v\n", err)
 			}
 		}
 	}

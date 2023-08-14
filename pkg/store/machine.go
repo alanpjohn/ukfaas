@@ -13,14 +13,14 @@ import (
 
 	zip "api.zip"
 	"github.com/alanpjohn/uk-faas/pkg"
-	"github.com/alanpjohn/uk-faas/pkg/network"
+	networkapi "github.com/alanpjohn/uk-faas/pkg/api/network"
 	"github.com/vishvananda/netlink"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	machineapi "kraftkit.sh/api/machine/v1alpha1"
-	networkapi "kraftkit.sh/api/network/v1alpha1"
-	volumeapi "kraftkit.sh/api/volume/v1alpha1"
+	kraftMachine "kraftkit.sh/api/machine/v1alpha1"
+	kraftNet "kraftkit.sh/api/network/v1alpha1"
+	kraftVol "kraftkit.sh/api/volume/v1alpha1"
 	machinename "kraftkit.sh/machine/name"
 	bridge "kraftkit.sh/machine/network/bridge"
 	mplatform "kraftkit.sh/machine/platform"
@@ -35,9 +35,9 @@ type MachineStore struct {
 	// functionMachineMap map[string][]MachineID
 
 	// Stores machineConfiguration by machineID
-	machineInstanceMap map[MachineID]*machineapi.Machine
-	machineNetworkMap  map[MachineID]networkapi.NetworkInterfaceTemplateSpec
-	caddy              network.NetworkController
+	machineInstanceMap map[MachineID]*kraftMachine.Machine
+	machineNetworkMap  map[MachineID]kraftNet.NetworkInterfaceTemplateSpec
+	networkController  networkapi.NetworkController
 }
 
 type MachineRequest struct {
@@ -53,21 +53,21 @@ type MachineRequest struct {
 	Labels       *map[string]string
 }
 
-func NewMachineStore(caddy network.NetworkController) (*MachineStore, error) {
+func NewMachineStore(caddy networkapi.NetworkController) (*MachineStore, error) {
 
 	return &MachineStore{
 		// functionMachineMap: make(map[string][]MachineID),
-		caddy:              caddy,
-		machineInstanceMap: make(map[MachineID]*zip.Object[machineapi.MachineSpec, machineapi.MachineStatus]),
-		machineNetworkMap:  make(map[MachineID]networkapi.NetworkInterfaceTemplateSpec),
+		networkController:  caddy,
+		machineInstanceMap: make(map[MachineID]*zip.Object[kraftMachine.MachineSpec, kraftMachine.MachineStatus]),
+		machineNetworkMap:  make(map[MachineID]kraftNet.NetworkInterfaceTemplateSpec),
 		// volumeController:   volumeService,
 		// networkController:  networkController,
 		// machineController:  machineController,
 	}, nil
 }
 
-func (m *MachineStore) GetMachinesForFunction(service string) ([]machineapi.Machine, error) {
-	var machines []machineapi.Machine
+func (m *MachineStore) GetMachinesForFunction(service string) ([]kraftMachine.Machine, error) {
+	var machines []kraftMachine.Machine
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 	for _, machine := range m.machineInstanceMap {
@@ -92,7 +92,7 @@ func (m *MachineStore) GetReplicas(service string) uint64 {
 	defer m.lock.RUnlock()
 	count := 0
 	for _, machine := range m.machineInstanceMap {
-		if machine.GetObjectMeta().GetLabels()["ukfaas.io/service"] == service && machine.Status.State == machineapi.MachineStateRunning {
+		if machine.GetObjectMeta().GetLabels()["ukfaas.io/service"] == service && machine.Status.State == kraftMachine.MachineStateRunning {
 			count += 1
 		}
 	}
@@ -100,7 +100,7 @@ func (m *MachineStore) GetReplicas(service string) uint64 {
 }
 
 func (m *MachineStore) GetAvailableReplicas(service string) uint64 {
-	count, _ := m.caddy.HealthyInstances(service)
+	count, _ := m.networkController.AvailableIPs(service)
 	return count
 }
 
@@ -136,9 +136,9 @@ func (m *MachineStore) ScaleMachinesTo(ctx context.Context, service string, repl
 	return nil
 }
 
-func (m *MachineStore) getFunctionMachine(service string) (*machineapi.Machine, error) {
+func (m *MachineStore) getFunctionMachine(service string) (*kraftMachine.Machine, error) {
 	for _, machine := range m.machineInstanceMap {
-		if machine.GetObjectMeta().GetLabels()["ukfaas.io/service"] == service && machine.Status.State == machineapi.MachineStateRunning {
+		if machine.GetObjectMeta().GetLabels()["ukfaas.io/service"] == service && machine.Status.State == kraftMachine.MachineStateRunning {
 			return machine, nil
 		}
 	}
@@ -167,7 +167,7 @@ func (m *MachineStore) destroyMachine(ctx context.Context, service string) error
 		log.Printf("[MachineStore.destroyMachine] - Not found machine for %s\n", service)
 		return notFoundErr
 	}
-	machine.Status.State = machineapi.MachineStateUnknown
+	machine.Status.State = kraftMachine.MachineStateUnknown
 	mId := MachineID(machine.GetObjectMeta().GetUID())
 
 	log.Printf("[MachineStore.destroyMachine] - Destroying Machine id:%s\n", mId)
@@ -185,7 +185,7 @@ func (m *MachineStore) destroyMachine(ctx context.Context, service string) error
 	// 	}
 	// }
 
-	err = m.caddy.DeleteFunctionInstance(service, iface.Spec.IP)
+	err = m.networkController.DeleteServiceIP(service, networkapi.IP(iface.Spec.IP))
 	if err != nil {
 		return err
 	}
@@ -295,9 +295,9 @@ func (m *MachineStore) NewMachine(ctx context.Context, function FunctionMetaData
 func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) error {
 	var err error
 
-	machine := &machineapi.Machine{
+	machine := &kraftMachine.Machine{
 		ObjectMeta: metav1.ObjectMeta{},
-		Spec: machineapi.MachineSpec{
+		Spec: kraftMachine.MachineSpec{
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{},
 			},
@@ -323,21 +323,21 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 	machine.Status.KernelPath = mreq.KernelPath
 
 	log.Printf("[MachineStore.createMachie] - Setting up volumes: %s\n", machine.ObjectMeta.UID)
-	machine.Spec.Volumes = []volumeapi.Volume{}
+	machine.Spec.Volumes = []kraftVol.Volume{}
 	volumePath := filepath.Join(mreq.StoragePath, "unikraft/fs0")
 
 	volumeService, err := ninefps.NewVolumeServiceV1alpha1(ctx)
 	if err != nil {
 		return fmt.Errorf("volume service failed")
 	}
-	fs0, err := volumeService.Create(ctx, &volumeapi.Volume{
+	fs0, err := volumeService.Create(ctx, &kraftVol.Volume{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: volumePath,
 		},
-		Spec: volumeapi.VolumeSpec{
+		Spec: kraftVol.VolumeSpec{
 			Driver:   "9pfs",
 			Source:   volumePath,
-			ReadOnly: false, // TODO(nderjung): Options are not yet supported.
+			ReadOnly: false,
 		},
 	})
 
@@ -349,7 +349,7 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 	log.Printf("[MachineStore.createMachie] - Setting up network: %s\n", machine.ObjectMeta.UID)
 	networkName := "openfaas0"
 	networkController, err := bridge.NewNetworkServiceV1alpha1(ctx)
-	found, err := networkController.Get(ctx, &networkapi.Network{
+	found, err := networkController.Get(ctx, &kraftNet.Network{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: networkName,
 		},
@@ -358,17 +358,17 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 		return err
 	}
 
-	newIface := networkapi.NetworkInterfaceTemplateSpec{
+	newIface := kraftNet.NetworkInterfaceTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			UID: machine.GetObjectMeta().GetUID(),
 		},
-		Spec: networkapi.NetworkInterfaceSpec{
+		Spec: kraftNet.NetworkInterfaceSpec{
 			IfName: fmt.Sprintf("%s@if%s", networkName, machine.ObjectMeta.UID),
 		},
 	}
 
 	if found.Spec.Interfaces == nil {
-		found.Spec.Interfaces = []networkapi.NetworkInterfaceTemplateSpec{}
+		found.Spec.Interfaces = []kraftNet.NetworkInterfaceTemplateSpec{}
 	}
 	found.Spec.Interfaces = append(found.Spec.Interfaces, newIface)
 
@@ -386,10 +386,10 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 		}
 	}
 	// Set the interface on the machine.
-	found.Spec.Interfaces = []networkapi.NetworkInterfaceTemplateSpec{newIface}
+	found.Spec.Interfaces = []kraftNet.NetworkInterfaceTemplateSpec{newIface}
 
 	log.Printf("[MachineStore.createMachie] - Set IP %s for %s\n", newIface.Spec.IP, machine.ObjectMeta.UID)
-	machine.Spec.Networks = []networkapi.NetworkSpec{found.Spec}
+	machine.Spec.Networks = []kraftNet.NetworkSpec{found.Spec}
 
 	machine.ObjectMeta.Name = machinename.NewRandomMachineName(0)
 	if mreq.Annotations != nil {
@@ -424,8 +424,8 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 		return err
 	}
 
-	for _, network := range machine.Spec.Networks {
-		for _, iface := range network.Interfaces {
+	for _, machineNetwork := range machine.Spec.Networks {
+		for _, iface := range machineNetwork.Interfaces {
 			go func(ip string) {
 				url := fmt.Sprintf("%s:%d", ip, pkg.WatchdogPort)
 				client := &http.Client{}
@@ -447,7 +447,7 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 					resp.Body.Close()
 				}
 
-				m.caddy.AddFunctionInstance(mreq.Service, ip)
+				m.networkController.AddServiceIP(mreq.Service, networkapi.IP(ip))
 			}(iface.Spec.IP)
 		}
 	}
