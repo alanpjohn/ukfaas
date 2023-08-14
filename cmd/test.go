@@ -46,8 +46,8 @@ func runTest(_ *cobra.Command, _ []string) error {
 	}
 
 	req := types.FunctionDeployment{
-		Image:       "unikraft.org/uk-dynamic-html:latest",
-		Service:     "dynamic-html",
+		Image:       "unikraft.org/uk-py-faas:latest",
+		Service:     "hello-world",
 		EnvVars:     map[string]string{},
 		Secrets:     []string{},
 		Labels:      &map[string]string{},

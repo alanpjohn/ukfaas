@@ -429,9 +429,8 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 			go func(ip string) {
 				url := fmt.Sprintf("%s:%d", ip, pkg.WatchdogPort)
 				client := &http.Client{}
-				status := 0
 
-				for status != http.StatusOK {
+				for {
 					req, err := http.NewRequest("GET", fmt.Sprintf("http://%s", url), nil)
 					if err != nil {
 						time.Sleep(2 * time.Second)
@@ -443,8 +442,8 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 						time.Sleep(2 * time.Second)
 						continue
 					}
-					status = resp.StatusCode
 					resp.Body.Close()
+					break
 				}
 
 				m.networkController.AddServiceIP(mreq.Service, networkapi.IP(ip))

@@ -14,6 +14,7 @@ import (
 )
 
 type InternalNetworkContoller struct {
+	instanceCount       uint64
 	healthCheckTable    sync.Map
 	instancesMap        sync.Map
 	defaultLoadBalancer LoadBalancerConstructor
@@ -64,8 +65,9 @@ func (n *InternalNetworkContoller) AddServiceIP(service string, ip networkapi.IP
 	if err != nil {
 		return err
 	}
-	n.healthCheckTable.Store(ip, true)
+	n.healthCheckTable.Store(ip, checkHealth(context.TODO(), ip, ""))
 	n.instancesMap.Store(service, updatedLb)
+	n.instanceCount += 1
 	log.Printf("[InternalNetworkController.AddServiceIP] - Added IP %s to Service %s", ip, service)
 	return nil
 }
@@ -87,6 +89,7 @@ func (n *InternalNetworkContoller) DeleteServiceIP(service string, ip networkapi
 		n.instancesMap.Store(service, updatedLb)
 	}
 	n.healthCheckTable.Delete(ip)
+	n.instanceCount -= 1
 	log.Printf("[InternalNetworkController.DeleteServiceIP] - Deleted IP %s from Service %s", ip, service)
 	return nil
 }
@@ -104,6 +107,7 @@ func (n *InternalNetworkContoller) DeleteService(service string) error {
 		ips := lb.GetIPs()
 		for ip := range ips {
 			n.healthCheckTable.Delete(ip)
+			n.instanceCount -= 1
 		}
 		log.Printf("[InternalNetworkController.DeleteService] - Deleted Service %s", service)
 	}
@@ -174,7 +178,8 @@ func (n *InternalNetworkContoller) RunHealthChecks(ctx context.Context) {
 				ip := key.(networkapi.IP)
 				health := checkHealth(ctx, ip, "/")
 				n.healthCheckTable.Store(ip, health)
-				time.Sleep(2 * time.Second)
+				delay := time.Duration(300) / time.Duration(n.instanceCount)
+				time.Sleep(delay * time.Second)
 			}
 			return true
 		})
@@ -195,5 +200,5 @@ func checkHealth(ctx context.Context, ip networkapi.IP, healthPath string) bool 
 		return false
 	}
 	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
+	return resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusBadRequest
 }
