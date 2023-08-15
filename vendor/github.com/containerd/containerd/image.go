@@ -404,21 +404,23 @@ func (i *image) Unpack(ctx context.Context, snapshotterName string, opts ...Unpa
 		chain = append(chain, layer.Diff.Digest)
 	}
 
-	desc, err := i.i.Config(ctx, cs, i.platform)
-	if err != nil {
-		return err
-	}
+	// log.Printf("Getting Config descriptor")
+	// desc, err := i.i.Config(ctx, cs, i.platform)
+	// if err != nil {
+	// 	log.Printf("Error Getting Config descriptor")
+	// 	return err
+	// }
 
-	rootfs := identity.ChainID(chain).String()
+	// rootfs := identity.ChainID(chain).String()
 
-	cinfo := content.Info{
-		Digest: desc.Digest,
-		Labels: map[string]string{
-			fmt.Sprintf("containerd.io/gc.ref.snapshot.%s", snapshotterName): rootfs,
-		},
-	}
+	// cinfo := content.Info{
+	// 	Digest: desc.Digest,
+	// 	Labels: map[string]string{
+	// 		fmt.Sprintf("containerd.io/gc.ref.snapshot.%s", snapshotterName): rootfs,
+	// 	},
+	// }
 
-	_, err = cs.Update(ctx, cinfo, fmt.Sprintf("labels.containerd.io/gc.ref.snapshot.%s", snapshotterName))
+	// _, err = cs.Update(ctx, cinfo, fmt.Sprintf("labels.containerd.io/gc.ref.snapshot.%s", snapshotterName))
 	return err
 }
 

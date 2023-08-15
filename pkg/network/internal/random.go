@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"log"
 	"math/rand"
 
 	networkapi "github.com/alanpjohn/uk-faas/pkg/api/network"
@@ -38,7 +37,6 @@ func (rlb *RandomLoadBalancer) DeleteInstance(ip networkapi.IP) (LoadBalancer, e
 			index++
 		}
 	}
-	log.Printf("[RandomLoadBalancer.DeleteInstance] - Size = %v", rlb.size-1)
 	return &RandomLoadBalancer{
 		size: rlb.size - 1,
 		ips:  newIpList,

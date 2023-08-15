@@ -160,7 +160,6 @@ func (f *FunctionStore) AddFunction(ctx context.Context, req types.FunctionDeplo
 		return FunctionMetaData{}, fmt.Errorf("package does not convert to target")
 	}
 
-	log.Printf("[FunctionStore.Addfunction] - Waiting for lock")
 	f.lock.Lock()
 	defer f.lock.Unlock()
 

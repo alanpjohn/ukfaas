@@ -24,7 +24,7 @@ var testCmd = &cobra.Command{
 	RunE:  runTest,
 }
 
-func runTest(_ *cobra.Command, _ []string) error {
+func runTest(_ *cobra.Command, args []string) error {
 	ctx := context.Background()
 	fStore, err := store.NewFunctionStore(ctx, "/run/containerd/containerd.sock", "default")
 	if err != nil {
@@ -46,8 +46,8 @@ func runTest(_ *cobra.Command, _ []string) error {
 	}
 
 	req := types.FunctionDeployment{
-		Image:       "unikraft.org/uk-py-faas:latest",
-		Service:     "hello-world",
+		Image:       args[0],
+		Service:     "test-func",
 		EnvVars:     map[string]string{},
 		Secrets:     []string{},
 		Labels:      &map[string]string{},
