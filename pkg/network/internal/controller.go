@@ -176,9 +176,9 @@ func (n *InternalNetworkContoller) RunHealthChecks(ctx context.Context) {
 				return false
 			default:
 				ip := key.(networkapi.IP)
-				health := checkHealth(ctx, ip, "/")
+				health := checkHealth(ctx, ip, "/health")
 				n.healthCheckTable.Store(ip, health)
-				delay := time.Duration(300) / time.Duration(n.instanceCount)
+				delay := time.Duration(300) / time.Duration(n.instanceCount+1)
 				time.Sleep(delay * time.Second)
 			}
 			return true

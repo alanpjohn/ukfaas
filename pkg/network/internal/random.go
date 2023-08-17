@@ -29,6 +29,9 @@ func (rlb *RandomLoadBalancer) AddInstance(ip networkapi.IP) (LoadBalancer, erro
 }
 
 func (rlb *RandomLoadBalancer) DeleteInstance(ip networkapi.IP) (LoadBalancer, error) {
+	if rlb.size == 0 {
+		return rlb, nil
+	}
 	newIpList := make([]networkapi.IP, rlb.size-1)
 	index := 0
 	for _, currIp := range rlb.ips {

@@ -6,12 +6,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sync"
 	"time"
 
-	zip "api.zip"
 	"github.com/alanpjohn/uk-faas/pkg"
 	networkapi "github.com/alanpjohn/uk-faas/pkg/api/network"
 	"github.com/vishvananda/netlink"
@@ -29,15 +28,12 @@ import (
 )
 
 type MachineStore struct {
-	lock sync.RWMutex
+	lock            sync.RWMutex
+	healthChecklock sync.Mutex
 
-	// Stores machineID mapped to the Function
-	// functionMachineMap map[string][]MachineID
-
-	// Stores machineConfiguration by machineID
-	machineInstanceMap map[MachineID]*kraftMachine.Machine
-	machineNetworkMap  map[MachineID]kraftNet.NetworkInterfaceTemplateSpec
-	networkController  networkapi.NetworkController
+	machineInstanceMapv2 sync.Map
+	machineNetworkMapv2  sync.Map
+	networkController    networkapi.NetworkController
 }
 
 type MachineRequest struct {
@@ -53,29 +49,32 @@ type MachineRequest struct {
 	Labels       *map[string]string
 }
 
-func NewMachineStore(caddy networkapi.NetworkController) (*MachineStore, error) {
+func NewMachineStore(nc networkapi.NetworkController) (*MachineStore, error) {
 
 	return &MachineStore{
-		// functionMachineMap: make(map[string][]MachineID),
-		networkController:  caddy,
-		machineInstanceMap: make(map[MachineID]*zip.Object[kraftMachine.MachineSpec, kraftMachine.MachineStatus]),
-		machineNetworkMap:  make(map[MachineID]kraftNet.NetworkInterfaceTemplateSpec),
-		// volumeController:   volumeService,
-		// networkController:  networkController,
-		// machineController:  machineController,
+		networkController:    nc,
+		machineInstanceMapv2: sync.Map{},
+		machineNetworkMapv2:  sync.Map{},
 	}, nil
 }
 
 func (m *MachineStore) GetMachinesForFunction(service string) ([]kraftMachine.Machine, error) {
-	var machines []kraftMachine.Machine
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-	for _, machine := range m.machineInstanceMap {
+	var (
+		machines []kraftMachine.Machine
+		err      error
+	)
+	m.machineInstanceMapv2.Range(func(key, value any) bool {
+		machine, ok := value.(*kraftMachine.Machine)
+		if !ok {
+			err = fmt.Errorf("%s is not valid machine", key)
+			return false
+		}
 		if machine.GetObjectMeta().GetLabels()["ukfaas.io/service"] == service {
 			machines = append(machines, *machine)
 		}
-	}
-	return machines, fmt.Errorf("function %s not found", service)
+		return true
+	})
+	return machines, err
 }
 
 func (m *MachineStore) StopAllMachines(ctx context.Context, service string) error {
@@ -87,15 +86,70 @@ func (m *MachineStore) StopAllMachines(ctx context.Context, service string) erro
 	return nil
 }
 
+func (m *MachineStore) RunHealthChecks(ctx context.Context) error {
+	platform, _, err := mplatform.Detect(ctx)
+	if err != nil {
+		return err
+	}
+
+	machineStrategy, ok := mplatform.Strategies()[platform]
+	if !ok {
+		return fmt.Errorf("platform %s not supported", platform)
+	}
+	machineController, err := machineStrategy.NewMachineV1alpha1(ctx)
+	if err != nil {
+		return err
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+			time.Sleep(15 * time.Second)
+			m.machineInstanceMapv2.Range(func(key, value any) bool {
+				m.healthChecklock.Lock()
+				defer m.healthChecklock.Unlock()
+				mId, idOk := key.(MachineID)
+				machine, machineOk := value.(*kraftMachine.Machine)
+				if !idOk || !machineOk {
+					return false
+				}
+				if machine.Status.State != kraftMachine.MachineStateRunning {
+					return true
+				}
+
+				newMachine, err := machineController.Get(ctx, machine)
+
+				if err != nil {
+					log.Printf("[MachineStore.RunHealthChekcs] - Error : %v\n", err)
+					return true
+				}
+				if newMachine.Status.State != kraftMachine.MachineStateRunning {
+					log.Printf("[MachineStore.RunHealthChecks] - Status of %s is %s", mId, newMachine.Status.State)
+					m.destroyMachine(ctx, newMachine)
+				}
+				return true
+			})
+
+		}
+	}
+
+}
+
 func (m *MachineStore) GetReplicas(service string) uint64 {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
 	count := 0
-	for _, machine := range m.machineInstanceMap {
+	m.machineInstanceMapv2.Range(func(key, value any) bool {
+		mId, idOk := key.(MachineID)
+		machine, machineOk := value.(*kraftMachine.Machine)
+		if !idOk || !machineOk {
+			log.Printf("[MachineStore.GetReplicas] - Invalid machine entry found %s %v %v", mId, idOk, machineOk)
+			return false
+		}
 		if machine.GetObjectMeta().GetLabels()["ukfaas.io/service"] == service && machine.Status.State == kraftMachine.MachineStateRunning {
 			count += 1
 		}
-	}
+		return true
+	})
 	return uint64(count)
 }
 
@@ -105,6 +159,9 @@ func (m *MachineStore) GetAvailableReplicas(service string) uint64 {
 }
 
 func (m *MachineStore) ScaleMachinesTo(ctx context.Context, service string, replicas uint64) error {
+	m.healthChecklock.Lock()
+	defer m.healthChecklock.Unlock()
+
 	var wg sync.WaitGroup
 	currReplicas := m.GetReplicas(service)
 	if currReplicas < replicas {
@@ -124,7 +181,7 @@ func (m *MachineStore) ScaleMachinesTo(ctx context.Context, service string, repl
 			wg.Add(1)
 			log.Printf("[MachineStore.ScaleMachinesTo] - Scaling Down %s\n", service)
 			go func() {
-				err := m.destroyMachine(ctx, service)
+				err := m.DeleteMachine(ctx, service)
 				if err != nil {
 					log.Printf("error: %v\n", err)
 				}
@@ -137,16 +194,41 @@ func (m *MachineStore) ScaleMachinesTo(ctx context.Context, service string, repl
 }
 
 func (m *MachineStore) getFunctionMachine(service string) (*kraftMachine.Machine, error) {
-	for _, machine := range m.machineInstanceMap {
-		if machine.GetObjectMeta().GetLabels()["ukfaas.io/service"] == service && machine.Status.State == kraftMachine.MachineStateRunning {
-			return machine, nil
+	var requestedMachine *kraftMachine.Machine
+	m.machineInstanceMapv2.Range(func(key, value any) bool {
+		mId, idOk := key.(MachineID)
+		machine, machineOk := value.(*kraftMachine.Machine)
+		if !idOk || !machineOk {
+			log.Printf("[MachineStore.GetReplicas] - Invalid machine entry found %s %v %v", mId, idOk, machineOk)
+			return false
 		}
+		if machine.GetObjectMeta().GetLabels()["ukfaas.io/service"] == service && machine.Status.State == kraftMachine.MachineStateRunning {
+			requestedMachine = machine
+			return false
+		}
+		return true
+	})
+	if requestedMachine != nil {
+		return requestedMachine, nil
 	}
 
 	return nil, fmt.Errorf("function %s not found", service)
 }
 
-func (m *MachineStore) destroyMachine(ctx context.Context, service string) error {
+func (m *MachineStore) DeleteMachine(ctx context.Context, service string) error {
+	machine, notFoundErr := m.getFunctionMachine(service)
+	if notFoundErr != nil {
+		log.Printf("[MachineStore.destroyMachine] - Not found machine for %s\n", service)
+		return notFoundErr
+	}
+	machine.Status.State = kraftMachine.MachineStateUnknown
+	mId := MachineID(machine.GetObjectMeta().GetUID())
+	log.Printf("[MachineStore.destroyMachine] - Destroying Machine id:%s\n", mId)
+	m.machineInstanceMapv2.Store(mId, machine)
+	return m.destroyMachine(ctx, machine)
+}
+
+func (m *MachineStore) destroyMachine(ctx context.Context, machine *kraftMachine.Machine) error {
 	platform, _, err := mplatform.Detect(ctx)
 	if err != nil {
 		return err
@@ -161,30 +243,17 @@ func (m *MachineStore) destroyMachine(ctx context.Context, service string) error
 		return err
 	}
 
-	m.lock.Lock()
-	machine, notFoundErr := m.getFunctionMachine(service)
-	if notFoundErr != nil {
-		log.Printf("[MachineStore.destroyMachine] - Not found machine for %s\n", service)
-		return notFoundErr
-	}
-	machine.Status.State = kraftMachine.MachineStateUnknown
 	mId := MachineID(machine.GetObjectMeta().GetUID())
+	val, exists := m.machineNetworkMapv2.Load(mId)
+	if !exists {
+		return fmt.Errorf("network interface for %s not found", mId)
+	}
+	iface, ok := val.(kraftNet.NetworkInterfaceTemplateSpec)
+	if !ok {
+		return fmt.Errorf("network interface for %s not valid", mId)
+	}
 
-	log.Printf("[MachineStore.destroyMachine] - Destroying Machine id:%s\n", mId)
-
-	m.machineInstanceMap[mId] = machine
-	iface := m.machineNetworkMap[mId]
-	m.lock.Unlock()
-
-	// for _, network := range machine.Spec.Networks {
-	// 	for _, iface := range network.Interfaces {
-	// 		err = m.caddy.DeleteFunctionInstance(service, iface.Spec.IP)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 	}
-	// }
-
+	service := machine.GetObjectMeta().GetLabels()["ukfaas.io/service"]
 	err = m.networkController.DeleteServiceIP(service, networkapi.IP(iface.Spec.IP))
 	if err != nil {
 		return err
@@ -193,39 +262,34 @@ func (m *MachineStore) destroyMachine(ctx context.Context, service string) error
 	log.Printf("[MachineStore.destroyMachine] - Stopping qemu-system_x86 id:%s\n", mId)
 	machine, stopErr := machineController.Stop(ctx, machine)
 	if stopErr != nil {
-		return stopErr
+		log.Printf("[MachineStore.destroyMachine] - Error stopping qemu-system_x86 id:%s err:%v\n", mId, stopErr)
 	}
 
 	log.Printf("[MachineStore.destroyMachine] - Deleting qemu-system_x86 id:%s\n", mId)
 	machine, delErr := machineController.Delete(ctx, machine)
-	m.lock.Lock()
-	defer m.lock.Unlock()
 
 	link, err := netlink.LinkByName(iface.Spec.IfName[:15])
 	if err != nil {
 		log.Printf("ERROR: Could not find %s - %v", iface.Spec.IfName, err)
-		// return fmt.Errorf("could not get %s link: %v", iface.Spec.IfName, err)
 	}
 
 	if machine == nil {
-		// Bring down the bridge link
 		if link != nil {
 			if err := netlink.LinkSetDown(link); err != nil {
 				return fmt.Errorf("could not bring %s link down: %v", iface.Spec.IfName, err)
 			}
 
-			// Delete the bridge link.
 			if err := netlink.LinkDel(link); err != nil {
 				return fmt.Errorf("could not delete %s link: %v", iface.Spec.IfName, err)
 			}
 		}
-		delete(m.machineNetworkMap, mId)
-		delete(m.machineInstanceMap, mId)
+		m.machineInstanceMapv2.Delete(mId)
+		m.machineNetworkMapv2.Delete(mId)
 	} else {
-		m.machineInstanceMap[mId] = machine
+		m.machineInstanceMapv2.Store(mId, machine)
 	}
 	if delErr != nil {
-		log.Printf("[MachineStore.destroyMachine] - Destroy Failed id:%s\n", mId)
+		log.Printf("[MachineStore.destroyMachine] - Error deleting qemu-system_x86 id:%s err:%v\n", mId, delErr)
 		return delErr
 	}
 
@@ -233,24 +297,14 @@ func (m *MachineStore) destroyMachine(ctx context.Context, service string) error
 }
 
 func (m *MachineStore) CloneMachine(ctx context.Context, service string) error {
-	m.lock.RLock()
 	machine, notFoundErr := m.getFunctionMachine(service)
 
 	if notFoundErr != nil {
 		log.Printf("[MachineStore.CloneMachine] - Not found machine for %s\n", service)
 		return notFoundErr
 	}
-	m.lock.RUnlock()
 
 	volumedir := machine.GetObjectMeta().GetAnnotations()["ukfaas.io/filesystem"]
-	re := regexp.MustCompile(`([\w/-]+)/unikraft/fs0`)
-
-	// Find the first match in the input string
-	matches := re.FindStringSubmatch(volumedir)
-	if len(matches) != 2 {
-		return fmt.Errorf("no storage directory found in the input string")
-	}
-	// log.Printf("Parsed filesystem location %s\n", matches[1])
 
 	log.Printf("[MachineStore.CloneMachine] - Cloning machine for%s\n", service)
 	return m.createMachine(ctx, MachineRequest{
@@ -261,7 +315,7 @@ func (m *MachineStore) CloneMachine(ctx context.Context, service string) error {
 		Platform:     machine.Spec.Platform,
 		Kernel:       machine.Spec.Kernel,
 		KernelPath:   machine.Status.KernelPath,
-		StoragePath:  matches[1],
+		StoragePath:  volumedir,
 		Annotations:  &machine.ObjectMeta.Annotations,
 		Labels:       &machine.ObjectMeta.Annotations,
 	})
@@ -286,7 +340,7 @@ func (m *MachineStore) NewMachine(ctx context.Context, function FunctionMetaData
 		Platform:     targ.Platform().Name(),
 		Kernel:       fmt.Sprintf("%s://%s", targ.Format(), req.Image),
 		KernelPath:   targ.Kernel(),
-		StoragePath:  function.StorageDir,
+		StoragePath:  filepath.Join(function.StorageDir, "unikraft/fs0"),
 		Annotations:  req.Annotations,
 		Labels:       req.Labels,
 	})
@@ -324,7 +378,16 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 
 	log.Printf("[MachineStore.createMachie] - Setting up volumes: %s\n", machine.ObjectMeta.UID)
 	machine.Spec.Volumes = []kraftVol.Volume{}
-	volumePath := filepath.Join(mreq.StoragePath, "unikraft/fs0")
+
+	volumeLayer := mreq.StoragePath
+	if err := os.MkdirAll(filepath.Join(machine.Status.StateDir, "unikraft"), 0o755); err != nil {
+		return err
+	}
+	volumePath := filepath.Join(machine.Status.StateDir, "unikraft/fs0")
+	err = copyDirectory(volumeLayer, volumePath)
+	if err != nil {
+		return fmt.Errorf("failed to copy volume directory : %v", err)
+	}
 
 	volumeService, err := ninefps.NewVolumeServiceV1alpha1(ctx)
 	if err != nil {
@@ -344,7 +407,6 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 	machine.Spec.Volumes = append(machine.Spec.Volumes, *fs0)
 
 	m.lock.Lock()
-	defer m.lock.Unlock()
 
 	log.Printf("[MachineStore.createMachie] - Setting up network: %s\n", machine.ObjectMeta.UID)
 	networkName := "openfaas0"
@@ -378,6 +440,7 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 		return err
 	}
 
+	m.lock.Unlock()
 	// Only use the single new interface.
 	for _, iface := range found.Spec.Interfaces {
 		if iface.UID == newIface.UID {
@@ -405,7 +468,7 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 	machine.ObjectMeta.Labels["ukfaas.io/service"] = mreq.Service
 	machine.ObjectMeta.Labels["ukfaas.io/image"] = mreq.Image
 	machine.ObjectMeta.Labels["ukfaas.io/namespace"] = mreq.Namespace
-	machine.ObjectMeta.Annotations["ukfaas.io/filesystem"] = volumePath
+	machine.ObjectMeta.Annotations["ukfaas.io/filesystem"] = volumeLayer
 
 	platform, _, err := mplatform.Detect(ctx)
 
@@ -459,13 +522,14 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 
 	mId := MachineID(machine.GetObjectMeta().GetUID())
 	log.Printf("[MachineStore.createMachie] - Status of %s is %s\n", mId, machine.Status.State)
-	// if machines, exists := m.functionMachineMap[req.Service]; exists {
-	// 	m.functionMachineMap[req.Service] = append(machines, mId)
-	// } else {
-	// 	m.functionMachineMap[req.Service] = []MachineID{mId}
-	// }
 
-	m.machineInstanceMap[mId] = machine
-	m.machineNetworkMap[mId] = newIface
+	m.machineInstanceMapv2.Store(mId, machine)
+	m.machineNetworkMapv2.Store(mId, newIface)
 	return nil
+}
+
+func copyDirectory(src, dest string) error {
+	cmd := exec.Command("cp", "-rT", src, dest)
+	err := cmd.Run()
+	return err
 }

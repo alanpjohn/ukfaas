@@ -45,6 +45,8 @@ func runTest(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	go mStore.RunHealthChecks(ctx)
+
 	req := types.FunctionDeployment{
 		Image:       args[0],
 		Service:     "test-func",
