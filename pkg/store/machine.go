@@ -376,39 +376,48 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 	machine.Spec.ApplicationArgs = []string{} // parse args from `req`
 	machine.Status.KernelPath = mreq.KernelPath
 
-	log.Printf("[MachineStore.createMachie] - Setting up volumes: %s\n", machine.ObjectMeta.UID)
-	machine.Spec.Volumes = []kraftVol.Volume{}
+	var volumeLayer string
+	if _, err := os.Stat(mreq.StoragePath); err != nil {
+		log.Printf("[MachineStore.createMachine] - No volumes found: %s\n", machine.ObjectMeta.UID)
+	} else {
+		log.Printf("[MachineStore.createMachine] - Setting up volumes: %s\n", machine.ObjectMeta.UID)
+		machine.Spec.Volumes = []kraftVol.Volume{}
 
-	volumeLayer := mreq.StoragePath
-	if err := os.MkdirAll(filepath.Join(machine.Status.StateDir, "unikraft"), 0o755); err != nil {
-		return err
-	}
-	volumePath := filepath.Join(machine.Status.StateDir, "unikraft/fs0")
-	err = copyDirectory(volumeLayer, volumePath)
-	if err != nil {
-		return fmt.Errorf("failed to copy volume directory : %v", err)
-	}
+		volumeLayer = mreq.StoragePath
+		if err := os.MkdirAll(filepath.Join(machine.Status.StateDir, "unikraft"), 0o755); err != nil {
+			return err
+		}
+		volumePath := filepath.Join(machine.Status.StateDir, "unikraft/fs0")
+		err = copyDirectory(volumeLayer, volumePath)
+		if err != nil {
+			return fmt.Errorf("failed to copy volume directory : %v", err)
+		}
 
-	volumeService, err := ninefps.NewVolumeServiceV1alpha1(ctx)
-	if err != nil {
-		return fmt.Errorf("volume service failed")
-	}
-	fs0, err := volumeService.Create(ctx, &kraftVol.Volume{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: volumePath,
-		},
-		Spec: kraftVol.VolumeSpec{
-			Driver:   "9pfs",
-			Source:   volumePath,
-			ReadOnly: false,
-		},
-	})
+		volumeService, err := ninefps.NewVolumeServiceV1alpha1(ctx)
+		if err != nil {
+			return fmt.Errorf("volume service failed")
+		}
+		fs0, err := volumeService.Create(ctx, &kraftVol.Volume{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: volumePath,
+			},
+			Spec: kraftVol.VolumeSpec{
+				Driver:   "9pfs",
+				Source:   volumePath,
+				ReadOnly: false,
+			},
+		})
 
-	machine.Spec.Volumes = append(machine.Spec.Volumes, *fs0)
+		if err != nil {
+			return fmt.Errorf("volume creation failed: %v", err)
+		}
+
+		machine.Spec.Volumes = append(machine.Spec.Volumes, *fs0)
+	}
 
 	m.lock.Lock()
 
-	log.Printf("[MachineStore.createMachie] - Setting up network: %s\n", machine.ObjectMeta.UID)
+	log.Printf("[MachineStore.createMachine] - Setting up network: %s\n", machine.ObjectMeta.UID)
 	networkName := "openfaas0"
 	networkController, err := bridge.NewNetworkServiceV1alpha1(ctx)
 	found, err := networkController.Get(ctx, &kraftNet.Network{
@@ -451,7 +460,7 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 	// Set the interface on the machine.
 	found.Spec.Interfaces = []kraftNet.NetworkInterfaceTemplateSpec{newIface}
 
-	log.Printf("[MachineStore.createMachie] - Set IP %s for %s\n", newIface.Spec.IP, machine.ObjectMeta.UID)
+	log.Printf("[MachineStore.createMachine] - Set IP %s for %s\n", newIface.Spec.IP, machine.ObjectMeta.UID)
 	machine.Spec.Networks = []kraftNet.NetworkSpec{found.Spec}
 
 	machine.ObjectMeta.Name = machinename.NewRandomMachineName(0)
@@ -481,7 +490,7 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 		return err
 	}
 
-	log.Printf("[MachineStore.createMachie] - Create qemu-system-x86_64 process for %s\n", machine.ObjectMeta.UID)
+	log.Printf("[MachineStore.createMachine] - Create qemu-system-x86_64 process for %s\n", machine.ObjectMeta.UID)
 	machine, err = machineController.Create(ctx, machine)
 	if err != nil {
 		return err
@@ -496,13 +505,13 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 				for {
 					req, err := http.NewRequest("GET", fmt.Sprintf("http://%s", url), nil)
 					if err != nil {
-						time.Sleep(2 * time.Second)
+						time.Sleep(500 * time.Millisecond)
 						continue
 					}
 
 					resp, err := client.Do(req)
 					if err != nil {
-						time.Sleep(2 * time.Second)
+						time.Sleep(500 * time.Millisecond)
 						continue
 					}
 					resp.Body.Close()
@@ -514,14 +523,14 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 		}
 	}
 
-	log.Printf("[MachineStore.createMachie] - Start qemu-system-x86_64 process for %s\n", machine.ObjectMeta.UID)
+	log.Printf("[MachineStore.createMachine] - Start qemu-system-x86_64 process for %s\n", machine.ObjectMeta.UID)
 	machine, err = machineController.Start(ctx, machine)
 	if err != nil {
 		return err
 	}
 
 	mId := MachineID(machine.GetObjectMeta().GetUID())
-	log.Printf("[MachineStore.createMachie] - Status of %s is %s\n", mId, machine.Status.State)
+	log.Printf("[MachineStore.createMachine] - Status of %s is %s\n", mId, machine.Status.State)
 
 	m.machineInstanceMapv2.Store(mId, machine)
 	m.machineNetworkMapv2.Store(mId, newIface)
