@@ -72,7 +72,12 @@ func runTest(_ *cobra.Command, args []string) error {
 	reader := bufio.NewReader(os.Stdin)
 	_, _ = reader.ReadString('\n')
 
-	err = mStore.ScaleMachinesTo(ctx, req.Service, 2)
+	err = mStore.ScaleMachinesTo(ctx, req.Service, 0)
+	if err != nil {
+		return err
+	}
+
+	err = mStore.NewMachine(ctx, function)
 	if err != nil {
 		return err
 	}

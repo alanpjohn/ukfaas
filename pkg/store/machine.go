@@ -266,7 +266,7 @@ func (m *MachineStore) destroyMachine(ctx context.Context, machine *kraftMachine
 	}
 
 	log.Printf("[MachineStore.destroyMachine] - Deleting qemu-system_x86 id:%s\n", mId)
-	machine, delErr := machineController.Delete(ctx, machine)
+	// machine, delErr := machineController.Delete(ctx, machine)
 
 	link, err := netlink.LinkByName(iface.Spec.IfName[:15])
 	if err != nil {
@@ -288,9 +288,9 @@ func (m *MachineStore) destroyMachine(ctx context.Context, machine *kraftMachine
 	} else {
 		m.machineInstanceMapv2.Store(mId, machine)
 	}
-	if delErr != nil {
-		log.Printf("[MachineStore.destroyMachine] - Error deleting qemu-system_x86 id:%s err:%v\n", mId, delErr)
-		return delErr
+	if err != nil {
+		log.Printf("[MachineStore.destroyMachine] - Error deleting qemu-system_x86 id:%s err:%v\n", mId, err)
+		return err
 	}
 
 	return nil
@@ -412,6 +412,8 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 			return fmt.Errorf("volume creation failed: %v", err)
 		}
 
+		log.Printf("MachineStore.createMachine] Attaching %s as volume", fs0.Spec.Source)
+
 		machine.Spec.Volumes = append(machine.Spec.Volumes, *fs0)
 	}
 
@@ -449,7 +451,6 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 		return err
 	}
 
-	m.lock.Unlock()
 	// Only use the single new interface.
 	for _, iface := range found.Spec.Interfaces {
 		if iface.UID == newIface.UID {
@@ -495,6 +496,7 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 	if err != nil {
 		return err
 	}
+	m.lock.Unlock()
 
 	for _, machineNetwork := range machine.Spec.Networks {
 		for _, iface := range machineNetwork.Interfaces {
@@ -539,6 +541,7 @@ func (m *MachineStore) createMachine(ctx context.Context, mreq MachineRequest) e
 
 func copyDirectory(src, dest string) error {
 	cmd := exec.Command("cp", "-rT", src, dest)
+	log.Printf("[CopyDirectory] %s", cmd.String())
 	err := cmd.Run()
 	return err
 }
