@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"path"
 	"sync"
 	"time"
 
@@ -65,6 +67,12 @@ func ReadBlob(ctx context.Context, provider Provider, desc ocispec.Descriptor) (
 
 	ra, err := provider.ReaderAt(ctx, desc)
 	if err != nil {
+		// Patch added to handle broken containerd image import
+		filepath := path.Join("/var/lib/containerd/io.containerd.content.v1.content/blobs/sha256", desc.Digest.String()[7:])
+		v, patchErr := ioutil.ReadFile(filepath)
+		if patchErr == nil {
+			return v, patchErr
+		}
 		return nil, err
 	}
 	defer ra.Close()

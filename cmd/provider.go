@@ -86,6 +86,8 @@ func makeProviderCmd() *cobra.Command {
 			return err
 		}
 
+		go mStore.RunHealthChecks(ctx)
+
 		invokeResolver := handlers.NewInvokeResolver(fStore, mStore, networkController)
 
 		baseUserSecretsPath := path.Join(wd, "secrets")

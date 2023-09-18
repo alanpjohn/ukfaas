@@ -29,9 +29,10 @@ func MakeReadHandler(fStore *store.FunctionStore, mStore *store.MachineStore) fu
 
 		// fns, err := ListFunctions(client, lookupNamespace)
 		res, err := fStore.ListFunctions()
-		for _, function := range res {
+		for index, function := range res {
 			function.Replicas = mStore.GetReplicas(function.Name)
 			function.AvailableReplicas = mStore.GetAvailableReplicas(function.Name)
+			res[index] = function
 		}
 
 		if err != nil {

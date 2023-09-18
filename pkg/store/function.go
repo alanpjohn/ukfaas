@@ -13,8 +13,8 @@ import (
 	"github.com/containerd/containerd"
 	store "github.com/containerd/containerd/namespaces"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/openfaas/faas-provider/types"
-	"k8s.io/apimachinery/pkg/util/uuid"
 	mplatform "kraftkit.sh/machine/platform"
 	oci "kraftkit.sh/oci"
 	"kraftkit.sh/oci/handler"
@@ -23,24 +23,14 @@ import (
 )
 
 type FunctionStore struct {
-	lock   sync.RWMutex
 	handle *handler.ContainerdHandler
 	client *containerd.Client
 
-	functionImageDirMap map[string]string
-	functionMetadataMap map[string]FunctionMetaData
+	imageStore            sync.Map
+	functionMetaDataMapV2 sync.Map
 }
 
 func NewFunctionStore(ctx context.Context, containerdAddr string, defaultNamespace string) (*FunctionStore, error) {
-	// pm, err := oci.NewOCIManager(ctx,
-	// 	oci.WithContainerd(ctx, containerdAddr, defaultNamespace),
-	// 	oci.WithDefaultRegistries(),
-	// 	oci.WithDefaultAuth(),
-	// )
-	// if err != nil {
-	// 	return nil, err
-	// }
-
 	client, err := containerd.New(containerdAddr, containerd.WithDefaultNamespace(defaultNamespace))
 	if err != nil {
 		return nil, err
@@ -52,10 +42,10 @@ func NewFunctionStore(ctx context.Context, containerdAddr string, defaultNamespa
 	}
 
 	return &FunctionStore{
-		handle:              handle,
-		client:              client,
-		functionImageDirMap: make(map[string]string),
-		functionMetadataMap: make(map[string]FunctionMetaData),
+		handle:                handle,
+		client:                client,
+		imageStore:            sync.Map{},
+		functionMetaDataMapV2: sync.Map{},
 	}, nil
 }
 
@@ -68,10 +58,7 @@ func (f *FunctionStore) NamespaceService() store.Store {
 }
 
 func (f *FunctionStore) FunctionExists(serviceName string) bool {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
-	_, exists := f.functionMetadataMap[serviceName]
+	_, exists := f.functionMetaDataMapV2.Load(serviceName)
 
 	return exists
 }
@@ -89,7 +76,10 @@ func (f *FunctionStore) AddFunction(ctx context.Context, req types.FunctionDeplo
 		return FunctionMetaData{}, fmt.Errorf("name parse failed with: %w", refErr)
 	}
 
-	var ocipack pack.Package
+	var (
+		ocipack    pack.Package
+		descriptor v1.Descriptor
+	)
 
 	log.Printf("[FunctionStore.Addfunction] - List manifests: %s\n", req.Image)
 	manifests, err := f.handle.ListManifests(ctx)
@@ -110,7 +100,6 @@ func (f *FunctionStore) AddFunction(ctx context.Context, req types.FunctionDeplo
 		if unikernelVersion, ok = manifest.Annotations["org.unikraft.image.version"]; !ok {
 			continue
 		}
-		// log.Println(foundUnikernelName, ref.Name())
 		if fmt.Sprintf("%s:%s", unikernelName, unikernelVersion) == ref.Name() {
 			ocipack, err = oci.NewPackageFromOCIManifestSpec(
 				ctx,
@@ -118,6 +107,7 @@ func (f *FunctionStore) AddFunction(ctx context.Context, req types.FunctionDeplo
 				ref.Name(),
 				manifest,
 			)
+			descriptor = manifest.Config
 			if err == nil {
 				break
 			} else {
@@ -130,39 +120,49 @@ func (f *FunctionStore) AddFunction(ctx context.Context, req types.FunctionDeplo
 		return FunctionMetaData{}, fmt.Errorf("no manifests found")
 	}
 
-	storageDir := filepath.Join(pkg.OCIDirectory, string(uuid.NewUUID()))
-	if err := os.MkdirAll(storageDir, 0o755); err != nil {
-		return FunctionMetaData{}, err
-	}
+	digest := descriptor.Digest.String()[4:]
 
-	defer func() {
-		if err != nil {
-			os.RemoveAll(storageDir)
+	var storageDir string
+	if val, exists := f.imageStore.Load(digest); exists {
+		ocipack = val.(pack.Package)
+		log.Printf("[FunctionStore.Addfunction] - Image already pulled: %s\n", ocipack.Name())
+		storageDir = filepath.Join(pkg.OCIDirectory, digest)
+	} else {
+		storageDir = filepath.Join(pkg.OCIDirectory, digest)
+		if err := os.MkdirAll(storageDir, 0o755); err != nil {
+			return FunctionMetaData{}, err
 		}
-	}()
 
-	platform, _, err := mplatform.Detect(ctx)
+		defer func() {
+			if err != nil {
+				os.RemoveAll(storageDir)
+			}
+		}()
 
-	log.Printf("[FunctionStore.Addfunction] - Pulling Image: %s\n", ocipack.Name())
-	err = ocipack.Pull(
-		ctx,
-		pack.WithPullWorkdir(storageDir),
-		pack.WithPullPlatform(platform.String()),
-	)
-	if err != nil {
-		return FunctionMetaData{}, err
+		platform, _, err := mplatform.Detect(ctx)
+		if err != nil {
+			return FunctionMetaData{}, err
+		}
+
+		log.Printf("[FunctionStore.Addfunction] - Pulling Image: %s\n", ocipack.Name())
+		err = ocipack.Pull(
+			ctx,
+			pack.WithPullWorkdir(storageDir),
+			pack.WithPullPlatform(platform.String()),
+		)
+		if err != nil {
+			return FunctionMetaData{}, err
+		}
+
+		log.Printf("[FunctionStore.Addfunction] - Pull Successful: %s\n", ocipack.Name())
+
 	}
 
-	log.Printf("[FunctionStore.Addfunction] - Pull Successful: %s\n", ocipack.Name())
 	_, ok := ocipack.(target.Target)
 	if !ok {
 		log.Printf("[FunctionStore.Addfunction] - package does not convert to target: %s\n", ocipack.Name())
 		return FunctionMetaData{}, fmt.Errorf("package does not convert to target")
 	}
-
-	log.Printf("[FunctionStore.Addfunction] - Waiting for lock")
-	f.lock.Lock()
-	defer f.lock.Unlock()
 
 	log.Printf("[FunctionStore.Addfunction] - Adding to FunctionStore: %s", req.Service)
 	functionMetadata := FunctionMetaData{
@@ -172,32 +172,26 @@ func (f *FunctionStore) AddFunction(ctx context.Context, req types.FunctionDeplo
 		CreatedAt:          time.Now(),
 	}
 
-	f.functionImageDirMap[req.Service] = storageDir
-	f.functionMetadataMap[req.Service] = functionMetadata
+	f.functionMetaDataMapV2.Store(req.Service, functionMetadata)
+	f.imageStore.Store(digest, ocipack)
 
 	return functionMetadata, nil
 }
 
 func (f *FunctionStore) DeleteFunction(service string) error {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
-	imageDir, exists := f.functionImageDirMap[service]
-	if !exists {
-		return fmt.Errorf("function %s not found", service)
-	}
-	delete(f.functionMetadataMap, service)
-	os.RemoveAll(imageDir)
+	f.functionMetaDataMapV2.Delete(service)
 
 	return nil
 }
 
 func (f *FunctionStore) ListFunctions() ([]types.FunctionStatus, error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
 	functions := []types.FunctionStatus{}
-	for fName, fMetadata := range f.functionMetadataMap {
+	f.functionMetaDataMapV2.Range(func(key, value any) bool {
+		fName, ok := key.(string)
+		fMetadata, fOk := value.(FunctionMetaData)
+		if !ok || !fOk {
+			return false
+		}
 		functions = append(functions, types.FunctionStatus{
 			Name:                   fName,
 			Image:                  fMetadata.Image,
@@ -212,12 +206,12 @@ func (f *FunctionStore) ListFunctions() ([]types.FunctionStatus, error) {
 			Limits:                 fMetadata.Limits,
 			Requests:               fMetadata.Requests,
 		})
-	}
+		return true
+	})
 	return functions, nil
 }
 
 func (f *FunctionStore) GetFunctionStatus(service string) (types.FunctionStatus, error) {
-
 	fMetadata, err := f.GetFunction(service)
 	if err != nil {
 		return types.FunctionStatus{}, fmt.Errorf("function %s not found", service)
@@ -241,11 +235,9 @@ func (f *FunctionStore) GetFunctionStatus(service string) (types.FunctionStatus,
 }
 
 func (f *FunctionStore) GetFunction(service string) (FunctionMetaData, error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
-	fMetadata, exists := f.functionMetadataMap[service]
-	if exists {
+	val, exists := f.functionMetaDataMapV2.Load(service)
+	fMetadata, valid := val.(FunctionMetaData)
+	if exists && valid {
 		return fMetadata, nil
 	}
 
@@ -253,10 +245,9 @@ func (f *FunctionStore) GetFunction(service string) (FunctionMetaData, error) {
 }
 
 func (f *FunctionStore) UpdateFunction(ctx context.Context, req types.FunctionDeployment) (FunctionMetaData, bool, error) {
-	f.lock.RLock()
-	fMetadata, exists := f.functionMetadataMap[req.Service]
-	if !exists {
-		return FunctionMetaData{}, false, fmt.Errorf("function %s not found", req.Service)
+	fMetadata, err := f.GetFunction(req.Service)
+	if err != nil {
+		return FunctionMetaData{}, false, err
 	}
 
 	updateImage := false
@@ -264,21 +255,19 @@ func (f *FunctionStore) UpdateFunction(ctx context.Context, req types.FunctionDe
 		updateImage = true
 	}
 
-	f.lock.RUnlock()
 	if updateImage {
 		f.DeleteFunction(req.Service)
 		funcMeta, err := f.AddFunction(ctx, req)
 		return funcMeta, updateImage, err
 	}
 
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
 	updatedFunc := FunctionMetaData{
 		FunctionDeployment: req,
 		Package:            fMetadata.Package,
 		StorageDir:         fMetadata.StorageDir,
 	}
+
+	f.functionMetaDataMapV2.Store(req.Service, updatedFunc)
 
 	return updatedFunc, false, nil
 }

@@ -3,11 +3,11 @@ module github.com/alanpjohn/uk-faas
 go 1.20
 
 require (
-	api.zip v0.1.5
 	github.com/containerd/containerd v1.7.2
 	github.com/docker/go-units v0.5.0
 	github.com/google/go-containerregistry v0.15.2
 	github.com/gorilla/mux v1.8.0
+	github.com/opencontainers/image-spec v1.1.0-rc4
 	github.com/openfaas/faasd v0.0.0-20230707124536-57baf34f5ac0
 	github.com/pkg/errors v0.9.1
 	github.com/rancher/wrangler v1.0.2
@@ -20,6 +20,7 @@ require (
 )
 
 require (
+	api.zip v0.1.5 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230106234847-43070de90fa1 // indirect
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
@@ -118,7 +119,6 @@ require (
 	github.com/muesli/termenv v0.15.2 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/opencontainers/image-spec v1.1.0-rc4 // indirect
 	github.com/opencontainers/runc v1.1.7 // indirect
 	github.com/opencontainers/runtime-spec v1.1.0-rc.3 // indirect
 	github.com/opencontainers/selinux v1.11.0 // indirect

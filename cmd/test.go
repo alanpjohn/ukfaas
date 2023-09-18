@@ -24,7 +24,7 @@ var testCmd = &cobra.Command{
 	RunE:  runTest,
 }
 
-func runTest(_ *cobra.Command, _ []string) error {
+func runTest(_ *cobra.Command, args []string) error {
 	ctx := context.Background()
 	fStore, err := store.NewFunctionStore(ctx, "/run/containerd/containerd.sock", "default")
 	if err != nil {
@@ -45,9 +45,11 @@ func runTest(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	go mStore.RunHealthChecks(ctx)
+
 	req := types.FunctionDeployment{
-		Image:       "unikraft.org/uk-py-faas:latest",
-		Service:     "hello-world",
+		Image:       args[0],
+		Service:     "test-func",
 		EnvVars:     map[string]string{},
 		Secrets:     []string{},
 		Labels:      &map[string]string{},
@@ -70,7 +72,12 @@ func runTest(_ *cobra.Command, _ []string) error {
 	reader := bufio.NewReader(os.Stdin)
 	_, _ = reader.ReadString('\n')
 
-	err = mStore.ScaleMachinesTo(ctx, req.Service, 2)
+	err = mStore.ScaleMachinesTo(ctx, req.Service, 0)
+	if err != nil {
+		return err
+	}
+
+	err = mStore.NewMachine(ctx, function)
 	if err != nil {
 		return err
 	}

@@ -1,7 +1,7 @@
 package internal
 
 import (
-	"log"
+	"fmt"
 	"math/rand"
 
 	networkapi "github.com/alanpjohn/uk-faas/pkg/api/network"
@@ -30,6 +30,9 @@ func (rlb *RandomLoadBalancer) AddInstance(ip networkapi.IP) (LoadBalancer, erro
 }
 
 func (rlb *RandomLoadBalancer) DeleteInstance(ip networkapi.IP) (LoadBalancer, error) {
+	if rlb.size == 0 {
+		return rlb, nil
+	}
 	newIpList := make([]networkapi.IP, rlb.size-1)
 	index := 0
 	for _, currIp := range rlb.ips {
@@ -38,7 +41,6 @@ func (rlb *RandomLoadBalancer) DeleteInstance(ip networkapi.IP) (LoadBalancer, e
 			index++
 		}
 	}
-	log.Printf("[RandomLoadBalancer.DeleteInstance] - Size = %v", rlb.size-1)
 	return &RandomLoadBalancer{
 		size: rlb.size - 1,
 		ips:  newIpList,
@@ -46,6 +48,9 @@ func (rlb *RandomLoadBalancer) DeleteInstance(ip networkapi.IP) (LoadBalancer, e
 }
 
 func (rlb *RandomLoadBalancer) NextInstance() (networkapi.IP, error) {
+	if rlb.size == 0 {
+		return "", fmt.Errorf("no ips for instance")
+	}
 	index := rand.Intn(int(rlb.size))
 	return rlb.ips[index], nil
 }
