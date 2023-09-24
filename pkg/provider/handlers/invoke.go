@@ -8,31 +8,33 @@ import (
 	"strings"
 
 	"github.com/alanpjohn/uk-faas/pkg"
+	functionapi "github.com/alanpjohn/uk-faas/pkg/api/function"
+	machineapi "github.com/alanpjohn/uk-faas/pkg/api/machine"
 	networkapi "github.com/alanpjohn/uk-faas/pkg/api/network"
-	"github.com/alanpjohn/uk-faas/pkg/store"
 )
 
 type InvokeResolver struct {
-	fStore       *store.FunctionStore
-	mStore       *store.MachineStore
-	networkStore networkapi.NetworkController
+	fStore       functionapi.FunctionService
+	mStore       machineapi.MachineService
+	networkStore networkapi.NetworkService
 }
 
-func NewInvokeResolver(f *store.FunctionStore, m *store.MachineStore, n networkapi.NetworkController) *InvokeResolver {
+func NewInvokeResolver(f functionapi.FunctionService, m machineapi.MachineService) *InvokeResolver {
 	return &InvokeResolver{
 		fStore:       f,
 		mStore:       m,
-		networkStore: n,
+		networkStore: m.NetworkService(),
 	}
 }
 
 func (i *InvokeResolver) Resolve(functionName string) (url.URL, error) {
-	actualFunctionName := functionName
+	ctx := context.Background()
 	if strings.Contains(functionName, ".") {
-		actualFunctionName = strings.TrimSuffix(functionName, "."+pkg.DefaultFunctionNamespace)
+		functionName = strings.TrimSuffix(functionName, "."+pkg.DefaultFunctionNamespace)
 	}
-	if function, err := i.fStore.GetFunction(actualFunctionName); err == nil {
-		if i.mStore.GetReplicas(actualFunctionName) == 0 {
+	actualFunctionName := functionName
+	if function, err := i.fStore.GetFunction(ctx, actualFunctionName); err == nil {
+		if i.mStore.GetReplicas(ctx, actualFunctionName) == 0 {
 			log.Printf("[InvokeResolver.Resolve] - Scaling instances to 1 for %s", actualFunctionName)
 			ctx := context.Background()
 			scaleErr := i.mStore.NewMachine(ctx, function)

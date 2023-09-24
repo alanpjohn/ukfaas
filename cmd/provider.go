@@ -8,12 +8,11 @@ import (
 	"os"
 	"path"
 
-	faasdlogs "github.com/alanpjohn/uk-faas/pkg/logs"
-	network "github.com/alanpjohn/uk-faas/pkg/network"
+	function "github.com/alanpjohn/uk-faas/pkg/function/v1"
+	machine "github.com/alanpjohn/uk-faas/pkg/machine/v1"
+	network "github.com/alanpjohn/uk-faas/pkg/network/loadbalancer"
 	"github.com/alanpjohn/uk-faas/pkg/provider/handlers"
-	"github.com/alanpjohn/uk-faas/pkg/store"
 	bootstrap "github.com/openfaas/faas-provider"
-	"github.com/openfaas/faas-provider/logs"
 	"github.com/openfaas/faas-provider/proxy"
 	"github.com/openfaas/faas-provider/types"
 	"github.com/openfaas/faasd/pkg/provider/config"
@@ -39,7 +38,7 @@ func makeProviderCmd() *cobra.Command {
 			alwaysPull = true
 		}
 
-		config, providerConfig, err := config.ReadFromEnv(types.OsEnv{})
+		config, _, err := config.ReadFromEnv(types.OsEnv{})
 		if err != nil {
 			return err
 		}
@@ -67,28 +66,28 @@ func makeProviderCmd() *cobra.Command {
 
 		ctx := context.Background()
 
-		fStore, err := store.NewFunctionStore(ctx, providerConfig.Sock, "default")
+		fStore, err := function.NewFunctionStoreV1(ctx,
+			function.WithContainerHandler("/run/containerd/containerd.sock", "default"),
+		)
 		if err != nil {
 			return err
 		}
 
 		defer fStore.Close()
 
-		networkController, err := network.GetNetworkController("internal")
+		networkController, err := network.NewInternalNetworkService()
 		if err != nil {
 			return err
 		}
 
-		go networkController.RunHealthChecks(ctx)
-
-		mStore, err := store.NewMachineStore(networkController)
+		mStore, err := machine.NewMachineServiceV1(ctx, networkController)
 		if err != nil {
 			return err
 		}
 
 		go mStore.RunHealthChecks(ctx)
 
-		invokeResolver := handlers.NewInvokeResolver(fStore, mStore, networkController)
+		invokeResolver := handlers.NewInvokeResolver(fStore, mStore)
 
 		baseUserSecretsPath := path.Join(wd, "secrets")
 
@@ -104,7 +103,7 @@ func makeProviderCmd() *cobra.Command {
 			Info:           handlers.MakeInfoHandler(Version, GitCommit),
 			ListNamespaces: handlers.MakeNamespacesLister(fStore),
 			// Secrets:         handlers.MakeSecretHandler(client.NamespaceService(), baseUserSecretsPath),
-			Logs: logs.NewLogHandlerFunc(faasdlogs.New(), config.ReadTimeout),
+			// Logs: logs.NewLogHandlerFunc(faasdlogs.New(), config.ReadTimeout),
 			// MutateNamespace: handlers.MakeMutateNamespace(client),
 		}
 

@@ -10,7 +10,6 @@ require (
 	github.com/opencontainers/image-spec v1.1.0-rc4
 	github.com/openfaas/faasd v0.0.0-20230707124536-57baf34f5ac0
 	github.com/pkg/errors v0.9.1
-	github.com/rancher/wrangler v1.0.2
 	github.com/sethvargo/go-password v0.2.0
 	github.com/spf13/cobra v1.7.0
 	github.com/vishvananda/netlink v1.2.1-beta.2
@@ -32,13 +31,10 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/briandowns/spinner v1.23.0 // indirect
 	github.com/cavaliergopher/cpio v1.0.1 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/charmbracelet/lipgloss v0.7.1 // indirect
-	github.com/cli/go-gh v1.2.1 // indirect
-	github.com/cli/safeexec v1.0.1 // indirect
 	github.com/compose-spec/compose-go v1.17.0 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/containerd/continuity v0.4.1 // indirect
@@ -64,7 +60,6 @@ require (
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/erikh/ping v0.0.0-20141209185752-d731d249e12a // indirect
-	github.com/fatih/color v1.15.0 // indirect
 	github.com/firecracker-microvm/firecracker-go-sdk v1.0.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/genuinetools/reg v0.16.1 // indirect
@@ -90,7 +85,6 @@ require (
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -101,12 +95,10 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20230110061619-bbe2e5e100de // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/mattn/go-shellwords v1.0.12 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
-	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/moby/locker v1.0.1 // indirect

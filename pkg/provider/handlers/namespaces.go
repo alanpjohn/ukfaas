@@ -7,10 +7,11 @@ import (
 	"net/http"
 
 	ukfaasd "github.com/alanpjohn/uk-faas/pkg"
-	"github.com/alanpjohn/uk-faas/pkg/store"
+
+	functionapi "github.com/alanpjohn/uk-faas/pkg/api/function"
 )
 
-func MakeNamespacesLister(fStore *store.FunctionStore) func(w http.ResponseWriter, r *http.Request) {
+func MakeNamespacesLister(fStore functionapi.FunctionService) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		list := ListNamespaces(fStore)
 		body, _ := json.Marshal(list)
@@ -20,7 +21,7 @@ func MakeNamespacesLister(fStore *store.FunctionStore) func(w http.ResponseWrite
 	}
 }
 
-func ListNamespaces(fStore *store.FunctionStore) []string {
+func ListNamespaces(fStore functionapi.FunctionService) []string {
 	set := []string{}
 	store := fStore.NamespaceService()
 	namespaces, err := store.List(context.Background())

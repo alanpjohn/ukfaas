@@ -8,8 +8,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	network "github.com/alanpjohn/uk-faas/pkg/network"
-	"github.com/alanpjohn/uk-faas/pkg/store"
+	function "github.com/alanpjohn/uk-faas/pkg/function/v1"
+	machine "github.com/alanpjohn/uk-faas/pkg/machine/v1"
+	network "github.com/alanpjohn/uk-faas/pkg/network/loadbalancer"
 	"github.com/openfaas/faas-provider/types"
 	"github.com/spf13/cobra"
 )
@@ -20,27 +21,28 @@ func init() {
 
 var testCmd = &cobra.Command{
 	Use:   "test",
-	Short: "testri faasd",
+	Short: "test faasd",
 	RunE:  runTest,
 }
 
 func runTest(_ *cobra.Command, args []string) error {
 	ctx := context.Background()
-	fStore, err := store.NewFunctionStore(ctx, "/run/containerd/containerd.sock", "default")
+
+	fStore, err := function.NewFunctionStoreV1(ctx,
+		function.WithContainerHandler("/run/containerd/containerd.sock", "default"),
+	)
 	if err != nil {
 		return err
 	}
 
 	defer fStore.Close()
 
-	networkController, err := network.GetNetworkController("internal")
+	networkController, err := network.NewInternalNetworkService()
 	if err != nil {
 		return err
 	}
 
-	go networkController.RunHealthChecks(ctx)
-
-	mStore, err := store.NewMachineStore(networkController)
+	mStore, err := machine.NewMachineServiceV1(ctx, networkController)
 	if err != nil {
 		return err
 	}

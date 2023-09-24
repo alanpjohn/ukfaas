@@ -9,11 +9,12 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/alanpjohn/uk-faas/pkg/store"
+	functionapi "github.com/alanpjohn/uk-faas/pkg/api/function"
+	machineapi "github.com/alanpjohn/uk-faas/pkg/api/machine"
 	"github.com/openfaas/faas-provider/types"
 )
 
-func MakeUpdateHandler(fStore *store.FunctionStore, mStore *store.MachineStore) func(w http.ResponseWriter, r *http.Request) {
+func MakeUpdateHandler(fStore functionapi.FunctionService, mStore machineapi.MachineService) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -51,7 +52,7 @@ func MakeUpdateHandler(fStore *store.FunctionStore, mStore *store.MachineStore) 
 		}
 
 		ctx := context.Background()
-		if function, err := fStore.GetFunctionStatus(name); err != nil {
+		if function, err := fStore.GetFunctionStatus(ctx, name); err != nil {
 			updatedFunction, updateImage, err := fStore.UpdateFunction(ctx, req)
 			if err != nil {
 				log.Printf("[Update] error updating %s, error: %s\n", name, err)
@@ -67,7 +68,7 @@ func MakeUpdateHandler(fStore *store.FunctionStore, mStore *store.MachineStore) 
 
 				go func(wg *sync.WaitGroup, errChan chan<- error) {
 					defer wg.Done()
-					err = mStore.StopAllMachines(ctx, function.Name)
+					err = mStore.StopAllMachines(ctx, name)
 				}(&wg, errChan)
 				go func(wg *sync.WaitGroup, errChan chan<- error) {
 					defer wg.Done()

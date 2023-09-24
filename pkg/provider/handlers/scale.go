@@ -9,11 +9,12 @@ import (
 	"net/http"
 
 	"github.com/alanpjohn/uk-faas/pkg"
-	"github.com/alanpjohn/uk-faas/pkg/store"
+	functionapi "github.com/alanpjohn/uk-faas/pkg/api/function"
+	machineapi "github.com/alanpjohn/uk-faas/pkg/api/machine"
 	"github.com/openfaas/faas-provider/types"
 )
 
-func MakeReplicaUpdateHandler(fStore *store.FunctionStore, mStore *store.MachineStore) func(w http.ResponseWriter, r *http.Request) {
+func MakeReplicaUpdateHandler(fStore functionapi.FunctionService, mStore machineapi.MachineService) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -53,19 +54,18 @@ func MakeReplicaUpdateHandler(fStore *store.FunctionStore, mStore *store.Machine
 		}
 
 		ctx := context.Background()
-		name := req.ServiceName
-		if function, err := fStore.GetFunction(name); err == nil {
-			if mStore.GetReplicas(name) == 0 {
+		if function, err := fStore.GetFunction(ctx, req.ServiceName); err == nil {
+			if mStore.GetReplicas(ctx, req.ServiceName) == 0 {
 				mStore.NewMachine(ctx, function)
 			}
-			err := mStore.ScaleMachinesTo(ctx, name, req.Replicas)
+			err := mStore.ScaleMachinesTo(ctx, req.ServiceName, req.Replicas)
 			if err != nil {
-				msg := fmt.Sprintf("Function %s not scaled: %v", name, err)
+				msg := fmt.Sprintf("Function %s not scaled: %v", req.ServiceName, err)
 				log.Printf("[Scale] %s\n", msg)
 				http.Error(w, msg, http.StatusInternalServerError)
 			}
 		} else {
-			msg := fmt.Sprintf("service %s not found : %v", name, err)
+			msg := fmt.Sprintf("service %s not found : %v", req.ServiceName, err)
 			log.Printf("[Scale] %s\n", msg)
 			http.Error(w, msg, http.StatusNotFound)
 		}

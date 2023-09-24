@@ -9,11 +9,12 @@ import (
 	"net/http"
 
 	"github.com/alanpjohn/uk-faas/pkg"
-	"github.com/alanpjohn/uk-faas/pkg/store"
+	function "github.com/alanpjohn/uk-faas/pkg/api/function"
+	machine "github.com/alanpjohn/uk-faas/pkg/api/machine"
 	"github.com/openfaas/faas-provider/types"
 )
 
-func MakeDeleteHandler(fStore *store.FunctionStore, mStore *store.MachineStore) func(w http.ResponseWriter, r *http.Request) {
+func MakeDeleteHandler(fStore function.FunctionService, mStore machine.MachineService) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Body == nil {
 			http.Error(w, "expected a body", http.StatusBadRequest)
@@ -64,7 +65,7 @@ func MakeDeleteHandler(fStore *store.FunctionStore, mStore *store.MachineStore) 
 				http.Error(w, msg, http.StatusInternalServerError)
 			}
 			log.Printf("[Delete] - Deleting function: %s\n", name)
-			err = fStore.DeleteFunction(name)
+			err = fStore.DeleteFunction(ctx, name)
 			if err != nil {
 				msg := fmt.Sprintf("Function %s not deleted: %v", name, err)
 				log.Printf("[Delete] %s\n", msg)

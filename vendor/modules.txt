@@ -67,9 +67,6 @@ github.com/aymanbagabas/go-osc52/v2
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
 github.com/beorn7/perks/quantile
-# github.com/briandowns/spinner v1.23.0
-## explicit; go 1.17
-github.com/briandowns/spinner
 # github.com/cavaliergopher/cpio v1.0.1
 ## explicit; go 1.17
 github.com/cavaliergopher/cpio
@@ -82,12 +79,6 @@ github.com/cespare/xxhash/v2
 # github.com/charmbracelet/lipgloss v0.7.1
 ## explicit; go 1.17
 github.com/charmbracelet/lipgloss
-# github.com/cli/go-gh v1.2.1
-## explicit; go 1.19
-github.com/cli/go-gh/pkg/term
-# github.com/cli/safeexec v1.0.1
-## explicit; go 1.15
-github.com/cli/safeexec
 # github.com/compose-spec/compose-go v1.17.0
 ## explicit; go 1.19
 github.com/compose-spec/compose-go/consts
@@ -308,9 +299,6 @@ github.com/dustin/go-humanize
 # github.com/erikh/ping v0.0.0-20141209185752-d731d249e12a
 ## explicit
 github.com/erikh/ping
-# github.com/fatih/color v1.15.0
-## explicit; go 1.17
-github.com/fatih/color
 # github.com/firecracker-microvm/firecracker-go-sdk v1.0.0
 ## explicit; go 1.11
 github.com/firecracker-microvm/firecracker-go-sdk
@@ -454,9 +442,6 @@ github.com/google/go-containerregistry/pkg/v1/types
 ## explicit; go 1.12
 github.com/google/gofuzz
 github.com/google/gofuzz/bytesource
-# github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
-## explicit; go 1.13
-github.com/google/shlex
 # github.com/google/uuid v1.3.0
 ## explicit
 github.com/google/uuid
@@ -501,9 +486,6 @@ github.com/lufia/plan9stats
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/mattn/go-colorable v0.1.13
-## explicit; go 1.15
-github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.19
 ## explicit; go 1.15
 github.com/mattn/go-isatty
@@ -516,9 +498,6 @@ github.com/mattn/go-shellwords
 # github.com/matttproud/golang_protobuf_extensions v1.0.4
 ## explicit; go 1.9
 github.com/matttproud/golang_protobuf_extensions/pbutil
-# github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d
-## explicit
-github.com/mgutz/ansi
 # github.com/mitchellh/go-homedir v1.1.0
 ## explicit
 github.com/mitchellh/go-homedir
@@ -579,7 +558,6 @@ github.com/opencontainers/selinux/pkg/pwalkdir
 github.com/openfaas/faas-provider
 github.com/openfaas/faas-provider/auth
 github.com/openfaas/faas-provider/httputil
-github.com/openfaas/faas-provider/logs
 github.com/openfaas/faas-provider/proxy
 github.com/openfaas/faas-provider/types
 # github.com/openfaas/faasd v0.0.0-20230707124536-57baf34f5ac0
@@ -627,9 +605,6 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
-# github.com/rancher/wrangler v1.0.2
-## explicit; go 1.17
-github.com/rancher/wrangler/pkg/signals
 # github.com/rivo/uniseg v0.4.4
 ## explicit; go 1.18
 github.com/rivo/uniseg
@@ -948,7 +923,6 @@ kraftkit.sh/internal/retrytimeout
 kraftkit.sh/internal/set
 kraftkit.sh/internal/version
 kraftkit.sh/internal/yamlmerger
-kraftkit.sh/iostreams
 kraftkit.sh/kconfig
 kraftkit.sh/log
 kraftkit.sh/machine/firecracker

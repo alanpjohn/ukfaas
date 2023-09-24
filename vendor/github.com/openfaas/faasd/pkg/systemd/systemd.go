@@ -69,7 +69,7 @@ func InstallUnit(name string, tokens map[string]string) error {
 		return fmt.Errorf("key Cwd expected in tokens parameter")
 	}
 
-	tmplName := "./hack/" + name + ".service"
+	tmplName := "./scripts/" + name + ".service"
 	tmpl, err := template.ParseFiles(tmplName)
 
 	if err != nil {

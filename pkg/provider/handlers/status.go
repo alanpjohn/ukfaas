@@ -1,14 +1,16 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
-	"github.com/alanpjohn/uk-faas/pkg/store"
+	functionapi "github.com/alanpjohn/uk-faas/pkg/api/function"
+	machineapi "github.com/alanpjohn/uk-faas/pkg/api/machine"
 	"github.com/gorilla/mux"
 )
 
-func MakeFunctionStatusHandler(fStore *store.FunctionStore, mStore *store.MachineStore) func(w http.ResponseWriter, r *http.Request) {
+func MakeFunctionStatusHandler(fStore functionapi.FunctionService, mStore machineapi.MachineService) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -27,9 +29,10 @@ func MakeFunctionStatusHandler(fStore *store.FunctionStore, mStore *store.Machin
 			return
 		}
 
-		if found, err := fStore.GetFunctionStatus(service); err == nil {
-			found.Replicas = mStore.GetReplicas(found.Name)
-			found.AvailableReplicas = mStore.GetAvailableReplicas(found.Name)
+		ctx := context.Background()
+		if found, err := fStore.GetFunctionStatus(ctx, service); err == nil {
+			found.Replicas = mStore.GetReplicas(ctx, service)
+			found.AvailableReplicas = mStore.GetAvailableReplicas(ctx, service)
 			functionBytes, _ := json.Marshal(found)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)

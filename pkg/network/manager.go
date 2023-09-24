@@ -1,34 +1,32 @@
 package network
 
 import (
+	"context"
 	"fmt"
 
 	networkapi "github.com/alanpjohn/uk-faas/pkg/api/network"
-	"github.com/alanpjohn/uk-faas/pkg/network/caddy"
-	"github.com/alanpjohn/uk-faas/pkg/network/internal"
 )
 
-func init() {
-	networkControllers = map[NetworkControllerType]NetworkControllerConstructor{
-		"internal": internal.NewInternalNetworkContoller,
-		"caddy":    caddy.NewCaddyController,
-	}
+type NetworkServiceConstructor func(context.Context, ...any) (networkapi.NetworkService, error)
+
+var (
+	networkServiceOpts         = make(map[networkapi.NetworkServiceType][]any)
+	networkServiceConstructors = make(map[networkapi.NetworkServiceType]NetworkServiceConstructor)
+)
+
+func RegisterNetworkService(networkServiceType networkapi.NetworkServiceType, constructor NetworkServiceConstructor, opts ...any) {
+	networkServiceConstructors[networkServiceType] = constructor
+	networkServiceOpts[networkServiceType] = opts
 }
 
-type NetworkControllerType string
-
-type NetworkControllerConstructor func(...any) (networkapi.NetworkController, error)
-
-var networkControllers map[NetworkControllerType]NetworkControllerConstructor
-
-func RegisterNetworkController(ncType NetworkControllerType, ncConstructor NetworkControllerConstructor) {
-	networkControllers[ncType] = ncConstructor
-}
-
-func GetNetworkController(ncType NetworkControllerType, options ...any) (networkapi.NetworkController, error) {
-	if ncConstruct, exists := networkControllers[ncType]; exists {
-		return ncConstruct(options...)
+func GetNetworkService(ctx context.Context, networkServiceType networkapi.NetworkServiceType) (networkapi.NetworkService, error) {
+	constructor, ok := networkServiceConstructors[networkServiceType]
+	if !ok {
+		return nil, fmt.Errorf("no NetworkService for %s specified", networkServiceType)
 	}
-
-	return nil, fmt.Errorf("network Controller %s not found", ncType)
+	opts, ok := networkServiceOpts[networkServiceType]
+	if !ok {
+		return constructor(ctx)
+	}
+	return constructor(ctx, opts)
 }

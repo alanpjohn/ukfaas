@@ -1,18 +1,21 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 
-	"github.com/alanpjohn/uk-faas/pkg/store"
+	functionapi "github.com/alanpjohn/uk-faas/pkg/api/function"
+	machineapi "github.com/alanpjohn/uk-faas/pkg/api/machine"
 )
 
-func MakeReadHandler(fStore *store.FunctionStore, mStore *store.MachineStore) func(w http.ResponseWriter, r *http.Request) {
+func MakeReadHandler(fStore functionapi.FunctionService, mStore machineapi.MachineService) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		lookupNamespace := getRequestNamespace(readNamespaceFromQuery(r))
+
 		// Check if namespace exists, and it has the openfaas label
 		valid, err := validNamespace(fStore.NamespaceService(), lookupNamespace)
 		if err != nil {
@@ -27,11 +30,11 @@ func MakeReadHandler(fStore *store.FunctionStore, mStore *store.MachineStore) fu
 			return
 		}
 
-		// fns, err := ListFunctions(client, lookupNamespace)
-		res, err := fStore.ListFunctions()
+		ctx := context.Background()
+		res, err := fStore.ListFunctions(ctx)
 		for index, function := range res {
-			function.Replicas = mStore.GetReplicas(function.Name)
-			function.AvailableReplicas = mStore.GetAvailableReplicas(function.Name)
+			function.Replicas = mStore.GetReplicas(ctx, function.Name)
+			function.AvailableReplicas = mStore.GetAvailableReplicas(ctx, function.Name)
 			res[index] = function
 		}
 
